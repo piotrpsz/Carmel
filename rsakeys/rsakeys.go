@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -30,6 +31,35 @@ func New() *RSAKeysManager {
 		return &RSAKeysManager{dir: dir}
 	}
 	return nil
+}
+
+func (rkm *RSAKeysManager) MyUserName() string {
+	if shared.MyUserName == "" {
+		if items, err := ioutil.ReadDir(rkm.dir); tr.IsOK(err) {
+			for _, item := range items {
+				if !item.IsDir() {
+					if name := getUserNameFromFileName(item.Name()); name != "" {
+						shared.MyUserName = name
+						fmt.Println(name)
+						return shared.MyUserName
+					}
+				}
+			}
+		}
+	}
+	return shared.MyUserName
+}
+
+func getUserNameFromFileName(text string) string {
+	if idx := strings.Index(text, "_"); idx != -1 {
+		name := text[:idx]
+		if idx < len(text)-1 {
+			if text[idx+1:] == "priv.pem" {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 func (rkm *RSAKeysManager) ExistPrivateKeyFor(userName string) bool {
