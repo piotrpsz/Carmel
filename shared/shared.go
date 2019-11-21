@@ -8,6 +8,10 @@ const (
 	AppSubname = "Secure communicator"
 )
 
+var (
+	MyIPAddr string
+)
+
 func AppNameAndVersion() string {
-	return fmt.Sprintf("%s v.  %s", AppName, AppVersion)
+	return fmt.Sprintf("%s  %s", AppName, AppVersion)
 }
