@@ -18,7 +18,8 @@ const (
 )
 
 var (
-	MyIPAddr string
+	MyIPAddr   string
+	MyUserName string
 )
 
 func AppNameAndVersion() string {
