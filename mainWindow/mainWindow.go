@@ -1,8 +1,11 @@
 package mainWindow
 
 import (
+	"Carmel/rsakeys"
 	"Carmel/shared"
 	"Carmel/shared/tr"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"github.com/gotk3/gotk3/glib"
@@ -77,7 +80,7 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 			})
 			rsaAction := glib.SimpleActionNew("rsa_keys", nil)
 			rsaAction.Connect("activate", func() {
-				fmt.Println("Generate RSA keys ...")
+				mw.generatingRSAKeys()
 			})
 			//-------------------------------------------------------
 			customGroup.AddAction(aboutAction)
@@ -102,10 +105,27 @@ func (mw *MainWindow) updateIP() {
 			data := make(map[string]interface{})
 			if err := json.Unmarshal(content, &data); tr.IsOK(err) {
 				if text, ok := data["ip"].(string); ok {
+					shared.MyIPAddr = text
 					markup := fmt.Sprintf(ipFormat, text)
 					glib.IdleAdd(mw.ip.SetMarkup, markup)
 				}
 			}
+		}
+	}
+}
+
+func (mw *MainWindow) generatingRSAKeys() {
+	fmt.Println("generateRSAKeys")
+	manager := rsakeys.New()
+	manager.CreateKeysForUser("piotr")
+
+	privateKey := manager.PrivateKeyFromFileForUser("piotr")
+	publicKey := manager.PublicKeyFromFileForUser("piotr")
+
+	text := "Piotr, Artur, Błażej Pszczółkowscy"
+	if cipher, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, []byte(text)); tr.IsOK(err) {
+		if plain, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, cipher); tr.IsOK(err) {
+			fmt.Println(string(plain))
 		}
 	}
 }
