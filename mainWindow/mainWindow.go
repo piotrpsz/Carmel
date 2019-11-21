@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
@@ -16,13 +17,20 @@ import (
 
 const (
 	ipFormat = "<span font_desc='8' foreground='#999999'>IP: </span>" +
-		"<span font_desc='10' foreground='#AAA555'> %s</span>"
+		"<span font_desc='10' foreground='#FFFFFF'> %s</span>"
+	userFormat = "<span font_desc='8' foreground='#999999'>User: </span>" +
+		"<span font_desc='10' foreground='#FFFFFF'> %s</span>"
+	unknownUserFormat = "<span font_desc='8' foreground='#999999'>User: </span>" +
+		"<span font_desc='10' foreground='#FF9966'> unknown</span>"
 )
 
 type MainWindow struct {
-	app *gtk.Application
-	win *gtk.ApplicationWindow
-	ip  *gtk.Label
+	app             *gtk.Application
+	win             *gtk.ApplicationWindow
+	user            *gtk.Label
+	ipAddr          *gtk.Label
+	connectToAction *glib.SimpleAction
+	rsaAction       *glib.SimpleAction
 }
 
 func New(app *gtk.Application) *MainWindow {
@@ -31,6 +39,15 @@ func New(app *gtk.Application) *MainWindow {
 		if headerBar := w.SetupHeaderBar(); headerBar != nil {
 			win.SetTitlebar(headerBar)
 			if w.SetupMenu(headerBar) {
+				w.user, _ = gtk.LabelNew("")
+				headerBar.PackStart(w.user)
+
+				w.ipAddr, _ = gtk.LabelNew("")
+				headerBar.PackEnd(w.ipAddr)
+
+				go w.updateIP()
+				go w.updateUser()
+
 				win.SetPosition(gtk.WIN_POS_CENTER)
 				win.SetDefaultSize(400, 200)
 				return w
@@ -49,10 +66,6 @@ func (mw *MainWindow) SetupHeaderBar() *gtk.HeaderBar {
 		headerBar.SetShowCloseButton(false)
 		headerBar.SetTitle(shared.AppNameAndVersion())
 		headerBar.SetSubtitle(shared.AppSubname)
-
-		mw.ip, _ = gtk.LabelNew("")
-		headerBar.PackStart(mw.ip)
-		go mw.updateIP()
 		return headerBar
 	}
 	return nil
@@ -61,9 +74,12 @@ func (mw *MainWindow) SetupHeaderBar() *gtk.HeaderBar {
 func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 	if menuButton, err := gtk.MenuButtonNew(); tr.IsOK(err) {
 		if menu := glib.MenuNew(); menu != nil {
+
+			menu.Append("Parameters for connection...", "custom.connection_parameters")
+			menu.Append("Connect to...", "custom.connect_to")
+			menu.Append("Generate RSA keys...", "custom.rsa_keys")
+			menu.Append("Settings...", "custom.settings")
 			menu.Append("About...", "custom.about")
-			menu.Append("Connect to ...", "custom.connect_to")
-			menu.Append("Generate RSA keys ...", "custom.rsa_keys")
 			menu.Append("Quit", "app.quit")
 
 			//=======================================================
@@ -74,18 +90,28 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 				fmt.Println("About ...")
 			})
 			//.......................................................
-			connectToAction := glib.SimpleActionNew("connect_to", nil)
-			connectToAction.Connect("activate", func() {
+			mw.connectToAction = glib.SimpleActionNew("connect_to", nil)
+			mw.connectToAction.Connect("activate", func() {
 				fmt.Println("Connect to ...")
 			})
-			rsaAction := glib.SimpleActionNew("rsa_keys", nil)
-			rsaAction.Connect("activate", func() {
+			//.......................................................
+			mw.rsaAction = glib.SimpleActionNew("rsa_keys", nil)
+			mw.rsaAction.Connect("activate", func() {
 				mw.generatingRSAKeys()
 			})
+			//.......................................................
+			connectionParametersAction := glib.SimpleActionNew("connection_parameters", nil)
+			connectionParametersAction.Connect("activate", func() {
+				fmt.Println("Clipboard")
+				clipboard, _ := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
+				clipboard.SetText("IDs: 34d8df, PIN: sjdh4")
+			})
 			//-------------------------------------------------------
+			customGroup.AddAction(connectionParametersAction)
 			customGroup.AddAction(aboutAction)
-			customGroup.AddAction(connectToAction)
-			customGroup.AddAction(rsaAction)
+			customGroup.AddAction(mw.connectToAction)
+			customGroup.AddAction(mw.rsaAction)
+
 			mw.win.InsertActionGroup("custom", customGroup)
 			//=======================================================
 
@@ -107,11 +133,22 @@ func (mw *MainWindow) updateIP() {
 				if text, ok := data["ip"].(string); ok {
 					shared.MyIPAddr = text
 					markup := fmt.Sprintf(ipFormat, text)
-					glib.IdleAdd(mw.ip.SetMarkup, markup)
+					glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
 				}
 			}
 		}
 	}
+}
+
+func (mw *MainWindow) updateUser() {
+	markup := ""
+
+	if name := rsakeys.New().MyUserName(); name != "" {
+		markup = fmt.Sprintf(userFormat, name)
+	} else {
+		markup = unknownUserFormat
+	}
+	glib.IdleAdd(mw.user.SetMarkup, markup)
 }
 
 func (mw *MainWindow) generatingRSAKeys() {
