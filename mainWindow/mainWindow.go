@@ -1,6 +1,7 @@
 package mainWindow
 
 import (
+	"Carmel/dialog/dialogWithOneField"
 	"Carmel/rsakeys"
 	"Carmel/shared"
 	"Carmel/shared/tr"
@@ -168,16 +169,14 @@ func (mw *MainWindow) aboutActionHandler() {
 }
 
 func (mw *MainWindow) connectToActionHandler() {
-	msg :=
-		"You are an undefined user.\n" +
-			"You cannot currently connect to or receive calls from other Carmel users." +
+	const msg = "You are an undefined user.\n"
+	const msgSecondary = "You cannot currently connect to or receive calls from other Carmel users." +
 			"This is due to the fact that no private key was found in the program directory.\n\n" +
 			"First, generate your RSA keys (private and public)."
 
 	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, msg); dialog != nil {
 		defer dialog.Destroy()
-
-		dialog.SetTitle(fmt.Sprintf("%s - unknown user", shared.AppName))
+		dialog.FormatSecondaryText(msgSecondary)
 		dialog.Run()
 	}
 }
@@ -209,7 +208,29 @@ func (mw *MainWindow) updateUser() {
 }
 
 func (mw *MainWindow) generatingRSAKeys() {
-	fmt.Println("generateRSAKeys")
+	if dialog := dialogWithOneField.New(mw.app); dialog != nil {
+		defer dialog.Destroy()
+
+		const (
+			prompt = "User name:"
+			description = "The username is used in the name of the key\n" +
+				"files (private and public). New keys are created\n" +
+				"when the name in new.\n" +
+				"After creating the keys, send the public key\n" +
+				"to the person you want to talk."
+		)
+
+		dialog.SetPrompt(prompt)
+		dialog.SetDescription(description)
+		dialog.ShowAll()
+		if dialog.Run() == gtk.RESPONSE_APPLY {
+
+		}
+	}
+	return
+}
+
+func (mw *MainWindow) createRSAKeys() {
 	manager := rsakeys.New()
 	manager.CreateKeysForUser("piotr")
 
