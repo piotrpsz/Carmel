@@ -16,6 +16,32 @@ import (
 )
 
 const (
+	licence = `BSD 2-Clause License
+
+Copyright (c) 2019, Piotr Pszczółkowski
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`
+
 	ipFormat = "<span font_desc='8' foreground='#999999'>IP: </span>" +
 		"<span font_desc='10' foreground='#FFFFFF'> %s</span>"
 	userFormat = "<span font_desc='8' foreground='#999999'>User: </span>" +
@@ -87,12 +113,12 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 			//.......................................................
 			aboutAction := glib.SimpleActionNew("about", nil)
 			aboutAction.Connect("activate", func() {
-				fmt.Println("About ...")
+				mw.aboutActionHandler()
 			})
 			//.......................................................
 			mw.connectToAction = glib.SimpleActionNew("connect_to", nil)
 			mw.connectToAction.Connect("activate", func() {
-				fmt.Println("Connect to ...")
+				mw.connectToActionHandler()
 			})
 			//.......................................................
 			mw.rsaAction = glib.SimpleActionNew("rsa_keys", nil)
@@ -124,6 +150,38 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 	return false
 }
 
+func (mw *MainWindow) aboutActionHandler() {
+	if dialog, err := gtk.AboutDialogNew(); tr.IsOK(err) {
+		defer dialog.Destroy()
+
+		dialog.SetTransientFor(mw.app.GetActiveWindow())
+		dialog.SetProgramName(shared.AppName)
+		dialog.SetVersion(shared.AppVersion)
+		dialog.SetCopyright("Copyright (c) 2019, Beesoft Software")
+		dialog.SetAuthors([]string{"Piotr Pszczółkowski (piotr@beesoft.pl)"})
+		dialog.SetWebsite("http://www.beesoft.pl/carmel")
+		dialog.SetWebsiteLabel("Carmel home page")
+		dialog.SetLicense(licence)
+		dialog.SetLogo(nil)
+		dialog.Run()
+	}
+}
+
+func (mw *MainWindow) connectToActionHandler() {
+	msg :=
+		"You are an undefined user.\n" +
+			"You cannot currently connect to or receive calls from other Carmel users." +
+			"This is due to the fact that no private key was found in the program directory.\n\n" +
+			"First, generate your RSA keys (private and public)."
+
+	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, msg); dialog != nil {
+		defer dialog.Destroy()
+
+		dialog.SetTitle(fmt.Sprintf("%s - unknown user", shared.AppName))
+		dialog.Run()
+	}
+}
+
 func (mw *MainWindow) updateIP() {
 	if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
 		defer response.Body.Close()
@@ -141,14 +199,13 @@ func (mw *MainWindow) updateIP() {
 }
 
 func (mw *MainWindow) updateUser() {
-	markup := ""
-
 	if name := rsakeys.New().MyUserName(); name != "" {
-		markup = fmt.Sprintf(userFormat, name)
-	} else {
-		markup = unknownUserFormat
+		glib.IdleAdd(mw.user.SetMarkup, fmt.Sprintf(userFormat, name))
+		return
 	}
-	glib.IdleAdd(mw.user.SetMarkup, markup)
+	glib.IdleAdd(mw.user.SetMarkup, unknownUserFormat)
+	/*
+	 */
 }
 
 func (mw *MainWindow) generatingRSAKeys() {
