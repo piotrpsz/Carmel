@@ -14,6 +14,8 @@ import (
 	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
 	"net/http"
+	"strings"
+	"unicode"
 )
 
 const (
@@ -203,32 +205,58 @@ func (mw *MainWindow) updateUser() {
 		return
 	}
 	glib.IdleAdd(mw.user.SetMarkup, unknownUserFormat)
-	/*
-	 */
 }
 
 func (mw *MainWindow) generatingRSAKeys() {
-	if dialog := dialogWithOneField.New(mw.app); dialog != nil {
+	validate := func(text string) dialogWithOneField.ValidationResult {
+		retv := dialogWithOneField.Ok
+
+		switch {
+		case strings.ContainsRune(text, ' '):
+			retv = dialogWithOneField.SpacesNotAllowed
+		case len(text) == 0:
+			retv = dialogWithOneField.EmptyStringNotAllowed
+		case unicode.IsDigit([]rune(text)[0]):
+			retv = dialogWithOneField.DigitAtStartNotAllowed
+		}
+
+		return retv
+	}
+
+	if dialog := dialogWithOneField.New(mw.app, validate); dialog != nil {
 		defer dialog.Destroy()
 
 		const (
 			prompt = "User name:"
 			description = "The username is used in the name of the key\n" +
-				"files (private and public). New keys are created\n" +
-				"when the name in new.\n" +
+				"'pem' files (private and public).\n" +
 				"After creating the keys, send the public key\n" +
 				"to the person you want to talk."
 		)
 
+
 		dialog.SetPrompt(prompt)
 		dialog.SetDescription(description)
+		if shared.MyUserName != "" {
+			dialog.SetValue(shared.MyUserName)
+		}
+
 		dialog.ShowAll()
-		if dialog.Run() == gtk.RESPONSE_APPLY {
+
+		switch dialog.Run() {
+		case gtk.RESPONSE_ACCEPT:
+			userName := dialog.GetValue()
+			fmt.Println("User name:", userName)
+			fmt.Println("Apply")
+		case gtk.RESPONSE_CANCEL:
+			fmt.Println("Cancel")
 
 		}
 	}
 	return
 }
+
+
 
 func (mw *MainWindow) createRSAKeys() {
 	manager := rsakeys.New()
