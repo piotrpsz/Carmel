@@ -12,9 +12,6 @@ const (
 	appID = "pl.beesoft.gtk3.carmel"
 )
 
-var (
-	App *gtk.Application
-)
 
 func main() {
 	if app, err := gtk.ApplicationNew(appID, glib.APPLICATION_FLAGS_NONE); tr.IsOK(err) {
