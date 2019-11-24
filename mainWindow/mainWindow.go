@@ -5,8 +5,6 @@ import (
 	"Carmel/rsakeys"
 	"Carmel/shared"
 	"Carmel/shared/tr"
-	"crypto/rand"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
@@ -126,7 +124,7 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 			//.......................................................
 			mw.rsaAction = glib.SimpleActionNew("rsa_keys", nil)
 			mw.rsaAction.Connect("activate", func() {
-				mw.generatingRSAKeys()
+				mw.generatingRSAKeysHandler()
 			})
 			//.......................................................
 			connectionParametersAction := glib.SimpleActionNew("connection_parameters", nil)
@@ -170,6 +168,12 @@ func (mw *MainWindow) aboutActionHandler() {
 	}
 }
 
+/********************************************************************
+*                                                                   *
+*     C O N N E C T   T O   H A N D L E R       *
+*                                                                   *
+********************************************************************/
+
 func (mw *MainWindow) connectToActionHandler() {
 	const msg = "You are an undefined user.\n"
 	const msgSecondary = "You cannot currently connect to or receive calls from other Carmel users." +
@@ -183,31 +187,23 @@ func (mw *MainWindow) connectToActionHandler() {
 	}
 }
 
-func (mw *MainWindow) updateIP() {
-	if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
-		defer response.Body.Close()
-		if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
-			data := make(map[string]interface{})
-			if err := json.Unmarshal(content, &data); tr.IsOK(err) {
-				if text, ok := data["ip"].(string); ok {
-					shared.MyIPAddr = text
-					markup := fmt.Sprintf(ipFormat, text)
-					glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
-				}
-			}
-		}
+/********************************************************************
+*                                                                   *
+*     G E N E R A T I N G   R S A   K E Y S   H A N D L E R         *
+*                                                                   *
+********************************************************************/
+
+func (mw *MainWindow) generatingRSAKeysHandler() {
+	if userName, ok := mw.getNameFromDialog(); ok {
+		mw.createRSAKeysForUserName(userName)
 	}
 }
 
-func (mw *MainWindow) updateUser() {
-	if name := rsakeys.New().MyUserName(); name != "" {
-		glib.IdleAdd(mw.user.SetMarkup, fmt.Sprintf(userFormat, name))
-		return
-	}
-	glib.IdleAdd(mw.user.SetMarkup, unknownUserFormat)
-}
-
-func (mw *MainWindow) generatingRSAKeys() {
+// getNameFromDialog
+// Displays dialog where user can enter the 'user name'.
+// When all is OK returns string with name as first result (second result is true).
+// When something was wrong the second parameter is false.
+func (mw *MainWindow) getNameFromDialog() (string, bool) {
 	validate := func(text string) dialogWithOneField.ValidationResult {
 		retv := dialogWithOneField.Ok
 
@@ -234,7 +230,6 @@ func (mw *MainWindow) generatingRSAKeys() {
 				"to the person you want to talk."
 		)
 
-
 		dialog.SetPrompt(prompt)
 		dialog.SetDescription(description)
 		if shared.MyUserName != "" {
@@ -245,22 +240,88 @@ func (mw *MainWindow) generatingRSAKeys() {
 
 		switch dialog.Run() {
 		case gtk.RESPONSE_ACCEPT:
-			userName := dialog.GetValue()
-			fmt.Println("User name:", userName)
-			fmt.Println("Apply")
+			return dialog.GetValue(), true
 		case gtk.RESPONSE_CANCEL:
-			fmt.Println("Cancel")
-
+			// nothing to do
 		}
 	}
-	return
+	return "", false
+}
+
+func (mw *MainWindow) createRSAKeysForUserName(userName string) bool {
+	if rsaManager := rsakeys.New(); rsaManager != nil {
+		canCreate := true
+		if rsaManager.ExistPrivateKeyFor(userName) || rsaManager.ExistPublicKeyFor(userName) {
+			canCreate = false
+			if mw.canRecreateKeys(userName) {
+				if rsaManager.RemoveKeysFor(userName) {
+					canCreate = true
+				}
+			}
+		}
+		if canCreate {
+			if rsaManager.CreateKeysForUser(userName) {
+				shared.MyUserName = userName
+				mw.updateUser()
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// canRecreateKeys
+// Displays a dialog in which the user should decide
+// whether to delete old keys and create new ones.
+func (mw *MainWindow) canRecreateKeys(userName string) bool {
+	const (
+		msgFormat = "Keys for user %s already exists"
+		msgSecond = "Would you like to recreate keys?"
+	)
+
+	title := fmt.Sprintf(msgFormat, userName)
+	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_WARNING, gtk.BUTTONS_OK, title); dialog != nil {
+		defer dialog.Destroy()
+		if _, err := dialog.AddButton("Cancel", gtk.RESPONSE_CANCEL); tr.IsOK(err) {
+			dialog.FormatSecondaryText(msgSecond)
+			return dialog.Run() == gtk.RESPONSE_OK
+		}
+	}
+	return false
+}
+
+/********************************************************************
+*                                                                   *
+*                         U P D A T E R S                           *
+*                                                                   *
+********************************************************************/
+
+func (mw *MainWindow) updateIP() {
+	if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
+		defer response.Body.Close()
+		if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
+			data := make(map[string]interface{})
+			if err := json.Unmarshal(content, &data); tr.IsOK(err) {
+				if text, ok := data["ip"].(string); ok {
+					shared.MyIPAddr = text
+					markup := fmt.Sprintf(ipFormat, text)
+					glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
+				}
+			}
+		}
+	}
+}
+
+func (mw *MainWindow) updateUser() {
+	if name := rsakeys.New().MyUserName(); name != "" {
+		glib.IdleAdd(mw.user.SetMarkup, fmt.Sprintf(userFormat, name))
+		return
+	}
+	glib.IdleAdd(mw.user.SetMarkup, unknownUserFormat)
 }
 
 
-
-func (mw *MainWindow) createRSAKeys() {
-	manager := rsakeys.New()
-	manager.CreateKeysForUser("piotr")
+/*
 
 	privateKey := manager.PrivateKeyFromFileForUser("piotr")
 	publicKey := manager.PublicKeyFromFileForUser("piotr")
@@ -271,4 +332,5 @@ func (mw *MainWindow) createRSAKeys() {
 			fmt.Println(string(plain))
 		}
 	}
-}
+
+*/

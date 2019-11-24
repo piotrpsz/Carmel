@@ -5,6 +5,7 @@ import (
 	"Carmel/shared/tr"
 	"fmt"
 	"github.com/gotk3/gotk3/gtk"
+	"strings"
 )
 
 type ValidationResult uint8
@@ -151,7 +152,7 @@ func (dialog *DialogWithOneField) SetValue(text string) {
 
 func (dialog *DialogWithOneField) GetValue() string {
 	if text, err := dialog.entry.GetText(); tr.IsOK(err) {
-		return text
+		return strings.ToLower(text)
 	}
 	return ""
 }

@@ -22,20 +22,20 @@ const (
 	keySize                  = 2048
 )
 
-type RSAKeysManager struct {
+type Manager struct {
 	dir string
 }
 
-func New() *RSAKeysManager {
+func New() *Manager {
 	if dir := shared.RSAKeysDir(); dir != "" {
-		return &RSAKeysManager{dir: dir}
+		return &Manager{dir: dir}
 	}
 	return nil
 }
 
-func (rkm *RSAKeysManager) MyUserName() string {
+func (m *Manager) MyUserName() string {
 	if shared.MyUserName == "" {
-		if items, err := ioutil.ReadDir(rkm.dir); tr.IsOK(err) {
+		if items, err := ioutil.ReadDir(m.dir); tr.IsOK(err) {
 			for _, item := range items {
 				if !item.IsDir() {
 					if name := getUserNameFromFileName(item.Name()); name != "" {
@@ -62,29 +62,38 @@ func getUserNameFromFileName(text string) string {
 	return ""
 }
 
-func (rkm *RSAKeysManager) ExistPrivateKeyFor(userName string) bool {
-	path := filepath.Join(rkm.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
-	if shared.ExistsFile(path) {
-		return true
-	}
-	return false
+func (m *Manager) RemoveKeysFor(userName string) bool {
+	return m.RemovePrivateKeyFor(userName) && m.RemovePublicKeyFor(userName)
 }
 
-func (rkm *RSAKeysManager) ExistPublicKeyFor(userName string) bool {
-	path := filepath.Join(rkm.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
-	if shared.ExistsFile(path) {
-		return true
-	}
-	return false
+func (m *Manager) RemovePrivateKeyFor(userName string) bool {
+	path := filepath.Join(m.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
+	return shared.RemoveFile(path)
 }
 
-func (rkm *RSAKeysManager) CreateKeysForUser(userName string) bool {
+func (m *Manager) RemovePublicKeyFor(userName string) bool {
+	path := filepath.Join(m.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
+	return shared.RemoveFile(path)
+}
+
+
+func (m *Manager) ExistPrivateKeyFor(userName string) bool {
+	path := filepath.Join(m.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
+	return shared.ExistsFile(path)
+}
+
+func (m *Manager) ExistPublicKeyFor(userName string) bool {
+	path := filepath.Join(m.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
+	return shared.ExistsFile(path)
+}
+
+func (m *Manager) CreateKeysForUser(userName string) bool {
 	if privateKey, err := rsa.GenerateKey(rand.Reader, keySize); tr.IsOK(err) {
 		privatePem := privatePemFromKey(privateKey)
 		publicPem := publicPemFromKey(privateKey.PublicKey)
 		if privatePem != nil && publicPem != nil {
-			privateKeyFilePath := filepath.Join(rkm.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
-			publicKeyFilePath := filepath.Join(rkm.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
+			privateKeyFilePath := filepath.Join(m.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
+			publicKeyFilePath := filepath.Join(m.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
 			if savePemToFile(privateKeyFilePath, privatePem) && savePemToFile(publicKeyFilePath, publicPem) {
 				return true
 			}
@@ -95,9 +104,8 @@ func (rkm *RSAKeysManager) CreateKeysForUser(userName string) bool {
 	return false
 }
 
-func (rkm *RSAKeysManager) PrivateKeyFromFileForUser(userName string) *rsa.PrivateKey {
-	filePath := filepath.Join(rkm.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
-
+func (m *Manager) PrivateKeyFromFileForUser(userName string) *rsa.PrivateKey {
+	filePath := filepath.Join(m.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
 	if data, err := ioutil.ReadFile(filePath); tr.IsOK(err) {
 		if block, _ := pem.Decode(data); block != nil && block.Type == privateKeyType {
 			if privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes); tr.IsOK(err) {
@@ -108,9 +116,8 @@ func (rkm *RSAKeysManager) PrivateKeyFromFileForUser(userName string) *rsa.Priva
 	return nil
 }
 
-func (rkm *RSAKeysManager) PublicKeyFromFileForUser(userName string) *rsa.PublicKey {
-	filePath := filepath.Join(rkm.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
-
+func (m *Manager) PublicKeyFromFileForUser(userName string) *rsa.PublicKey {
+	filePath := filepath.Join(m.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
 	if data, err := ioutil.ReadFile(filePath); tr.IsOK(err) {
 		if block, _ := pem.Decode(data); block != nil && block.Type == publicKeyType {
 			if publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes); tr.IsOK(err) {
