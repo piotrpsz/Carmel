@@ -1,6 +1,7 @@
 package mainWindow
 
 import (
+	"Carmel/chat"
 	"Carmel/dialog/dialogWithOneField"
 	"Carmel/rsakeys"
 	"Carmel/shared"
@@ -170,21 +171,27 @@ func (mw *MainWindow) aboutActionHandler() {
 
 /********************************************************************
 *                                                                   *
-*     C O N N E C T   T O   H A N D L E R       *
+*            C O N N E C T   T O   H A N D L E R                    *
 *                                                                   *
 ********************************************************************/
 
 func (mw *MainWindow) connectToActionHandler() {
-	const msg = "You are an undefined user.\n"
-	const msgSecondary = "You cannot currently connect to or receive calls from other Carmel users." +
+	if shared.MyUserName == "" {
+		const msg = "You are an undefined user.\n"
+		const msgSecondary = "You cannot currently connect to or receive calls from other Carmel users." +
 			"This is due to the fact that no private key was found in the program directory.\n\n" +
 			"First, generate your RSA keys (private and public)."
 
-	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, msg); dialog != nil {
-		defer dialog.Destroy()
-		dialog.FormatSecondaryText(msgSecondary)
-		dialog.Run()
+		if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, msg); dialog != nil {
+			defer dialog.Destroy()
+			dialog.FormatSecondaryText(msgSecondary)
+			dialog.Run()
+		}
+		return
 	}
+
+	chatter := chat.New(mw.app)
+	chatter.ShowAll()
 }
 
 /********************************************************************
