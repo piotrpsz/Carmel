@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -44,6 +45,12 @@ func RSAKeysDir() string {
 		}
 	}
 	return ""
+}
+
+func TimeAsString(t time.Time) string {
+	year, month, day := t.Date()
+	hour, min, sec := t.Hour(), t.Minute(), t.Second()
+	return fmt.Sprintf("%04d%02d%02d%02d%02d%02d", year, month, day, hour, min, sec)
 }
 
 /********************************************************************
