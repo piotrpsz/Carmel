@@ -22,7 +22,7 @@ type Gost struct {
 // As parameter user must pass a key.
 // The key size not equal 256 bit is treated as an error.
 func New(key []byte) *Gost {
-	if (8 * len(key)) != 256 {
+	if (len(key)) != KeySize {
 		log.Printf("Ghost error. Invalid key length. Is %d bit, should be 256 bit.\n", 8*len(key))
 		return nil
 	}

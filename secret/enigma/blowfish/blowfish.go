@@ -7,8 +7,8 @@ import (
 
 const (
 	blockSize    = 8  // in bytes (64-bit, two uint32 words)
-	minKeyLength = 4  // in bytes
-	maxKeyLength = 56 // in bytes
+	MinKeyLength = 4  // in bytes
+	MaxKeyLength = 56 // in bytes
 )
 
 type Blowfish struct {
@@ -18,7 +18,7 @@ type Blowfish struct {
 
 func New(key []byte) *Blowfish {
 	keyLen := len(key)
-	if keyLen < minKeyLength || keyLen > maxKeyLength {
+	if keyLen < MinKeyLength || keyLen > MaxKeyLength {
 		log.Printf("Blowfish error. Invalid key length. Is %d bit, should be 32..448 bit.\n", 8*keyLen)
 		return nil
 	}

@@ -47,10 +47,29 @@ func RSAKeysDir() string {
 	return ""
 }
 
-func TimeAsString(t time.Time) string {
+/********************************************************************
+*                                                                   *
+*                       D A T E   &   T I M E                       *
+*                                                                   *
+********************************************************************/
+
+func Now() time.Time {
+	t := time.Now().UTC()
 	year, month, day := t.Date()
 	hour, min, sec := t.Hour(), t.Minute(), t.Second()
-	return fmt.Sprintf("%04d%02d%02d%02d%02d%02d", year, month, day, hour, min, sec)
+	// without miliseconds
+	return time.Date(year, month, day, hour, min, sec, 0, time.UTC)
+}
+
+func TimeAsString(t time.Time) string {
+	year, month, day, hour, min, sec := DateTimeComponents(t)
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, min, sec)
+}
+
+func DateTimeComponents(t time.Time) (int, int, int, int, int, int) {
+	year, month, day := t.Date()
+	hour, min, sec := t.Hour(), t.Minute(), t.Second()
+	return year, int(month), day, hour, min, sec
 }
 
 /********************************************************************

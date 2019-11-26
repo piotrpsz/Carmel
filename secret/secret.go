@@ -31,9 +31,8 @@ func PaddingIndex(data []byte) int {
 		if data[i] != 0 {
 			if data[i] == 128 {
 				return i
-			} else {
-				break
 			}
+			break
 		}
 	}
 	return -1
