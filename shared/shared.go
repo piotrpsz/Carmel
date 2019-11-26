@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,6 +46,12 @@ func RSAKeysDir() string {
 		}
 	}
 	return ""
+}
+
+func AreFloat32Equal(a, b float32) bool {
+	epsilon := 0.000_01
+	diff := float64(a) - float64(b)
+	return math.Abs(diff) < epsilon
 }
 
 /********************************************************************
