@@ -7,7 +7,7 @@ import (
 
 const (
 	nmbr      = 11 // number of rounds
-	BlockSize = 12 // in bytes
+	blockSize = 12 // in bytes
 	KeySize   = 12 // in bytes
 )
 
@@ -70,14 +70,14 @@ func (tw *Way3) EncryptECB(plainText []byte) []byte {
 		return nil
 	}
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		plainText = append(plainText, secret.Padding(BlockSize-n)...)
+		plainText = append(plainText, secret.Padding(blockSize-n)...)
 		nbytes = len(plainText)
 	}
 
 	buffer := make([]byte, nbytes)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		a0, a1, a2 := tw.bytes2block(plainText[i:])
 		c0, c1, c2 := tw.encryptBlock(a0, a1, a2)
 		tw.block2bytes(c0, c1, c2, buffer[i:])
@@ -92,7 +92,7 @@ func (tw *Way3) DecryptECB(cipherText []byte) []byte {
 	nbytes := len(cipherText)
 	buffer := make([]byte, nbytes)
 
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		c0, c1, c2 := tw.bytes2block(cipherText[i:])
 		a0, a1, a2 := tw.decryptBlock(c0, c1, c2)
 		tw.block2bytes(a0, a1, a2, buffer[i:])
@@ -109,47 +109,47 @@ func (tw *Way3) EncryptCBC(plainText, iv []byte) []byte {
 		return nil
 	}
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		dn := BlockSize - n
+		dn := blockSize - n
 		plainText = append(plainText, secret.Padding(dn)...)
 		nbytes += dn
 	}
 	if iv == nil {
-		tiv := secret.RandomBytes(BlockSize)
+		tiv := secret.RandomBytes(blockSize)
 		if tiv == nil {
 			return nil
 		}
 		iv = tiv
 	}
 
-	buffer := make([]byte, nbytes+BlockSize)
-	for i := 0; i < BlockSize; i++ {
+	buffer := make([]byte, nbytes+blockSize)
+	for i := 0; i < blockSize; i++ {
 		buffer[i] = iv[i]
 	}
 
 	a0, a1, a2 := tw.bytes2block(iv)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		t0, t1, t2 := tw.bytes2block(plainText[i:])
 		a0, a1, a2 = tw.encryptBlock(t0^a0, t1^a1, t2^a2)
-		tw.block2bytes(a0, a1, a2, buffer[(i+BlockSize):])
+		tw.block2bytes(a0, a1, a2, buffer[(i+blockSize):])
 	}
 	return buffer
 }
 
 func (tw *Way3) DecryptCBC(cipherText []byte) []byte {
-	if cipherText == nil || len(cipherText) < BlockSize {
+	if cipherText == nil || len(cipherText) < blockSize {
 		return nil
 	}
 	nbytes := len(cipherText)
 
-	buffer := make([]byte, nbytes-BlockSize)
+	buffer := make([]byte, nbytes-blockSize)
 	p0, p1, p2 := tw.bytes2block(cipherText)
-	for i := BlockSize; i < nbytes; i += BlockSize {
+	for i := blockSize; i < nbytes; i += blockSize {
 		a0, a1, a2 := tw.bytes2block(cipherText[i:])
 		t0, t1, t2 := a0, a1, a2
 		c0, c1, c2 := tw.decryptBlock(a0, a1, a2)
-		tw.block2bytes(c0^p0, c1^p1, c2^p2, buffer[(i-BlockSize):])
+		tw.block2bytes(c0^p0, c1^p1, c2^p2, buffer[(i-blockSize):])
 		p0, p1, p2 = t0, t1, t2
 	}
 
