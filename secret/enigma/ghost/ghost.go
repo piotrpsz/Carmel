@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	BlockSize = 8 // in bytes (2 x uint32, 8 bytes, 64 bit, )
+	KeySize   = 32 // in bytes
+	blockSize = 8  // in bytes (2 x uint32, 8 bytes, 64 bit, )
 )
 
 type Gost struct {
@@ -149,14 +150,14 @@ func (gost *Gost) EncryptECB(plainText []byte) []byte {
 	}
 
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		plainText = append(plainText, secret.Padding(BlockSize-n)...)
+		plainText = append(plainText, secret.Padding(blockSize-n)...)
 		nbytes = len(plainText)
 	}
 
 	buffer := make([]byte, nbytes)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		n1, n2 := gost.bytes2block(plainText[i:])
 		n1, n2 = gost.encryptBlock(n1, n2)
 		gost.block2bytes(n1, n2, buffer[i:])
@@ -172,7 +173,7 @@ func (gost *Gost) DecryptECB(cipherText []byte) []byte {
 	nbytes := len(cipherText)
 
 	buffer := make([]byte, nbytes)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		n1, n2 := gost.bytes2block(cipherText[i:])
 		n1, n2 = gost.decryptBlock(n1, n2)
 		gost.block2bytes(n1, n2, buffer[i:])
@@ -189,30 +190,30 @@ func (gost *Gost) EncryptCBC(plainText, iv []byte) []byte {
 		return nil
 	}
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		dn := BlockSize - n
+		dn := blockSize - n
 		plainText = append(plainText, secret.Padding(dn)...)
 		nbytes += dn
 	}
 	if iv == nil {
-		tiv := secret.RandomBytes(BlockSize)
+		tiv := secret.RandomBytes(blockSize)
 		if tiv == nil {
 			return nil
 		}
 		iv = tiv
 	}
 
-	buffer := make([]byte, nbytes+BlockSize)
-	for i := 0; i < BlockSize; i++ {
+	buffer := make([]byte, nbytes+blockSize)
+	for i := 0; i < blockSize; i++ {
 		buffer[i] = iv[i]
 	}
 
 	n1, n2 := gost.bytes2block(iv)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		t1, t2 := gost.bytes2block(plainText[i:])
 		n1, n2 = gost.encryptBlock(t1^n1, t2^n2)
-		gost.block2bytes(n1, n2, buffer[(i+BlockSize):])
+		gost.block2bytes(n1, n2, buffer[(i+blockSize):])
 	}
 	return buffer
 }
@@ -223,14 +224,14 @@ func (gost *Gost) DecryptCBC(cipherText []byte) []byte {
 	}
 
 	nbytes := len(cipherText)
-	buffer := make([]byte, nbytes-BlockSize)
+	buffer := make([]byte, nbytes-blockSize)
 
 	p1, p2 := gost.bytes2block(cipherText)
-	for i := BlockSize; i < nbytes; i += BlockSize {
+	for i := blockSize; i < nbytes; i += blockSize {
 		n1, n2 := gost.bytes2block(cipherText[i:])
 		t1, t2 := n1, n2
 		c1, c2 := gost.decryptBlock(n1, n2)
-		gost.block2bytes(c1^p1, c2^p2, buffer[(i-BlockSize):])
+		gost.block2bytes(c1^p1, c2^p2, buffer[(i-blockSize):])
 		p1, p2 = t1, t2
 	}
 
