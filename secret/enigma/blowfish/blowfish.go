@@ -6,7 +6,9 @@ import (
 )
 
 const (
-	BlockSize = 8 // in bytes (64-bit, two uint32 words)
+	blockSize    = 8  // in bytes (64-bit, two uint32 words)
+	minKeyLength = 4  // in bytes
+	maxKeyLength = 56 // in bytes
 )
 
 type Blowfish struct {
@@ -16,7 +18,7 @@ type Blowfish struct {
 
 func New(key []byte) *Blowfish {
 	keyLen := len(key)
-	if keyLen < 4 || keyLen > 56 {
+	if keyLen < minKeyLength || keyLen > maxKeyLength {
 		log.Printf("Blowfish error. Invalid key length. Is %d bit, should be 32..448 bit.\n", 8*keyLen)
 		return nil
 	}
@@ -80,31 +82,31 @@ func New(key []byte) *Blowfish {
 
 func (bf *Blowfish) EncryptCBC(plainText, iv []byte) []byte {
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		dn := BlockSize - n
+		dn := blockSize - n
 		plainText = append(plainText, secret.Padding(dn)...)
 		nbytes += dn
 	}
 	if iv == nil {
-		tiv := secret.RandomBytes(BlockSize)
+		tiv := secret.RandomBytes(blockSize)
 		if tiv == nil {
 			return nil
 		}
 		iv = tiv
 	}
 
-	buffer := make([]byte, nbytes+BlockSize)
+	buffer := make([]byte, nbytes+blockSize)
 
-	for i := 0; i < BlockSize; i++ {
+	for i := 0; i < blockSize; i++ {
 		buffer[i] = iv[i]
 	}
 
 	n1, n2 := bf.bytes2block(iv)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		t1, t2 := bf.bytes2block(plainText[i:])
 		n1, n2 = bf.encryptBlock(t1^n1, t2^n2)
-		bf.block2bytes(n1, n2, buffer[(i+BlockSize):])
+		bf.block2bytes(n1, n2, buffer[(i+blockSize):])
 	}
 	return buffer
 }
@@ -115,16 +117,16 @@ func (bf *Blowfish) DecryptCBC(cipherText []byte) []byte {
 	}
 
 	nbytes := len(cipherText)
-	buffer := make([]byte, nbytes-BlockSize)
+	buffer := make([]byte, nbytes-blockSize)
 
 	p1, p2 := bf.bytes2block(cipherText)
-	for i := BlockSize; i < nbytes; i += BlockSize {
+	for i := blockSize; i < nbytes; i += blockSize {
 		n1, n2 := bf.bytes2block(cipherText[i:])
 		t1, t2 := n1, n2
 
 		c1, c2 := bf.decryptBlock(n1, n2)
 
-		bf.block2bytes(c1^p1, c2^p2, buffer[(i-BlockSize):])
+		bf.block2bytes(c1^p1, c2^p2, buffer[(i-blockSize):])
 		p1, p2 = t1, t2
 	}
 
@@ -140,14 +142,14 @@ func (bf *Blowfish) EncryptECB(plainText []byte) []byte {
 	}
 
 	nbytes := len(plainText)
-	n := nbytes % BlockSize
+	n := nbytes % blockSize
 	if n != 0 {
-		plainText = append(plainText, secret.Padding(BlockSize-n)...)
+		plainText = append(plainText, secret.Padding(blockSize-n)...)
 		nbytes = len(plainText)
 	}
 
 	buffer := make([]byte, nbytes)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		xl, xr := bf.bytes2block(plainText[i:])
 		xl, xr = bf.encryptBlock(xl, xr)
 		bf.block2bytes(xl, xr, buffer[i:])
@@ -162,7 +164,7 @@ func (bf *Blowfish) DecryptECB(cipherText []byte) []byte {
 	nbytes := len(cipherText)
 
 	buffer := make([]byte, nbytes)
-	for i := 0; i < nbytes; i += BlockSize {
+	for i := 0; i < nbytes; i += blockSize {
 		xl, xr := bf.bytes2block(cipherText[i:])
 		xl, xr = bf.decryptBlock(xl, xr)
 		bf.block2bytes(xl, xr, buffer[i:])
