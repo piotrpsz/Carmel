@@ -3,12 +3,12 @@ package mainWindow
 import (
 	"Carmel/chat"
 	"Carmel/dialog/dialogWithOneField"
+	"Carmel/dialog/waitForConnection"
 	"Carmel/rsakeys"
 	"Carmel/shared"
 	"Carmel/shared/tr"
 	"encoding/json"
 	"fmt"
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"io/ioutil"
@@ -103,7 +103,7 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 	if menuButton, err := gtk.MenuButtonNew(); tr.IsOK(err) {
 		if menu := glib.MenuNew(); menu != nil {
 
-			menu.Append("Parameters for connection...", "custom.connection_parameters")
+			menu.Append("Wait for connection...", "custom.wait4connection")
 			menu.Append("Connect to...", "custom.connect_to")
 			menu.Append("Generate RSA keys...", "custom.rsa_keys")
 			menu.Append("Settings...", "custom.settings")
@@ -128,14 +128,14 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 				mw.generatingRSAKeysHandler()
 			})
 			//.......................................................
-			connectionParametersAction := glib.SimpleActionNew("connection_parameters", nil)
-			connectionParametersAction.Connect("activate", func() {
-				fmt.Println("Clipboard")
-				clipboard, _ := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
-				clipboard.SetText("IDs: 34d8df, PIN: sjdh4")
+			wait4connectionAction := glib.SimpleActionNew("wait4connection", nil)
+			wait4connectionAction.Connect("activate", func() {
+				mw.waitForConnection()
+				//clipboard, _ := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
+				//clipboard.SetText("IDs: 34d8df, PIN: sjdh4")
 			})
 			//-------------------------------------------------------
-			customGroup.AddAction(connectionParametersAction)
+			customGroup.AddAction(wait4connectionAction)
 			customGroup.AddAction(aboutAction)
 			customGroup.AddAction(mw.connectToAction)
 			customGroup.AddAction(mw.rsaAction)
@@ -169,6 +169,39 @@ func (mw *MainWindow) aboutActionHandler() {
 	}
 }
 
+func (mw *MainWindow) notDefinedUserNameInfo() {
+	const msg = "You are an undefined user.\n"
+	const msgSecondary = "Sorry, you can't currently connect to or receive calls from other Carmel users." +
+		"This is due to the fact that no private key was found in the program directory.\n\n" +
+		"First, generate your RSA keys (private and public)."
+
+	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, msg); dialog != nil {
+		defer dialog.Destroy()
+		dialog.FormatSecondaryText(msgSecondary)
+		dialog.Run()
+	}
+}
+
+/********************************************************************
+*                                                                   *
+*      W A I T   F O R   C O N N E C T I O N   H A N D L E R        *
+*                                                                   *
+********************************************************************/
+
+func (mw *MainWindow) waitForConnection() {
+	if shared.MyUserName == "" {
+		mw.notDefinedUserNameInfo()
+		return
+	}
+
+	if dialog := waitForConnection.New(mw.app); dialog != nil {
+		defer dialog.Destroy()
+
+		dialog.ShowAll()
+		dialog.Run()
+	}
+}
+
 /********************************************************************
 *                                                                   *
 *            C O N N E C T   T O   H A N D L E R                    *
@@ -177,16 +210,7 @@ func (mw *MainWindow) aboutActionHandler() {
 
 func (mw *MainWindow) connectToActionHandler() {
 	if shared.MyUserName == "" {
-		const msg = "You are an undefined user.\n"
-		const msgSecondary = "You cannot currently connect to or receive calls from other Carmel users." +
-			"This is due to the fact that no private key was found in the program directory.\n\n" +
-			"First, generate your RSA keys (private and public)."
-
-		if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, msg); dialog != nil {
-			defer dialog.Destroy()
-			dialog.FormatSecondaryText(msgSecondary)
-			dialog.Run()
-		}
+		mw.notDefinedUserNameInfo()
 		return
 	}
 
@@ -230,7 +254,7 @@ func (mw *MainWindow) getNameFromDialog() (string, bool) {
 		defer dialog.Destroy()
 
 		const (
-			prompt = "User name:"
+			prompt      = "User name:"
 			description = "The username is used in the name of the key\n" +
 				"'pem' files (private and public).\n" +
 				"After creating the keys, send the public key\n" +
@@ -326,7 +350,6 @@ func (mw *MainWindow) updateUser() {
 	}
 	glib.IdleAdd(mw.user.SetMarkup, unknownUserFormat)
 }
-
 
 /*
 
