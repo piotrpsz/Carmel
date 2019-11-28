@@ -12,11 +12,24 @@ import (
 )
 
 const (
+	dialogTitle         = "wait for connection"
 	descriptionFormat   = "<span style='italic' font_desc='9' foreground='#AAA555'>%s</span>"
 	promptFormat        = "<span font_desc='8' foreground='#999999'>%s:</span>"
 	valueFormat         = "<span font_desc='11' foreground='#FFFFFF'>%s</span>"
 	clipboardDataFormat = "IP: %s\nPort: %s\nName: %s\nPIN: %s\n"
 	description         = "The following data should be sent securely\nto your partner so that he can connect with you.\n "
+
+	// button titles
+	startBtnTitle  = "start"
+	cancelBtnTitle = "cancel"
+	pinBtnTitle    = "pin"
+	copyBtnTtile   = "clipboard"
+
+	// tooltips
+	pinTooltip    = "generate new random PIN number"
+	cancelTooltip = "break action and return"
+	copyTooltip   = "copy data to the clipboard"
+	startTooltip  = "start waiting for connection"
 )
 
 type Dialog struct {
@@ -30,7 +43,7 @@ type Dialog struct {
 func New(app *gtk.Application) *Dialog {
 	if dialog, err := gtk.DialogNew(); tr.IsOK(err) {
 		dialog.SetTransientFor(app.GetActiveWindow())
-		dialog.SetTitle(shared.AppName)
+		dialog.SetTitle(dialogTitle)
 
 		instance := &Dialog{self: dialog}
 		if contentGrid := instance.createContent(); contentGrid != nil {
@@ -40,10 +53,13 @@ func New(app *gtk.Application) *Dialog {
 						if box, err := dialog.GetContentArea(); tr.IsOK(err) {
 							descriptionLabel.SetMarkup(fmt.Sprintf(descriptionFormat, description))
 
+							box.SetBorderWidth(6)
+							box.SetSpacing(4)
+
 							box.PackStart(descriptionLabel, false, false, 0)
 							box.PackStart(contentGrid, true, true, 0)
-							box.PackEnd(separator, true, true, 0)
-							box.PackEnd(buttonsBox, false, false, 0)
+							box.PackStart(separator, true, true, 0)
+							box.PackStart(buttonsBox, false, false, 0)
 							return instance
 						}
 					}
@@ -67,16 +83,24 @@ func (d *Dialog) Destroy() {
 }
 
 func (d *Dialog) createButtons() *gtk.Box {
-	if startBtn, err := gtk.ButtonNewWithLabel("start"); tr.IsOK(err) {
-		if cancelBtn, err := gtk.ButtonNewWithLabel("cancel"); tr.IsOK(err) {
-			if copyBtn, err := gtk.ButtonNewWithLabel("to clipboard"); tr.IsOK(err) {
-				if pinBtn, err := gtk.ButtonNewWithLabel("another PIN"); tr.IsOK(err) {
+	if startBtn, err := gtk.ButtonNewWithLabel(startBtnTitle); tr.IsOK(err) {
+		if cancelBtn, err := gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
+			if copyBtn, err := gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
+				if pinBtn, err := gtk.ButtonNewWithLabel(pinBtnTitle); tr.IsOK(err) {
 					if box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1); tr.IsOK(err) {
-						box.PackStart(pinBtn, false, false, 2)
-						box.PackStart(startBtn, false, false, 2)
-						box.PackStart(copyBtn, false, false, 2)
-						box.PackStart(cancelBtn, false, false, 2)
+						// tooltips
+						startBtn.SetTooltipText(startTooltip)
+						cancelBtn.SetTooltipText(cancelTooltip)
+						copyBtn.SetTooltipText(copyTooltip)
+						pinBtn.SetTooltipText(pinTooltip)
 
+						// pack widgets
+						box.PackStart(startBtn, true, true, 2)
+						box.PackStart(pinBtn, true, true, 2)
+						box.PackStart(copyBtn, true, true, 2)
+						box.PackStart(cancelBtn, true, true, 2)
+
+						// handle button events
 						cancelBtn.Connect("clicked", func() {
 							d.self.Response(gtk.RESPONSE_CANCEL)
 						})
@@ -169,7 +193,7 @@ func createUsernameWidgets() (*gtk.Label, *gtk.Label) {
 		if nameLabel, err := gtk.LabelNew(""); tr.IsOK(err) {
 			namePrompt.SetHAlign(gtk.ALIGN_END)
 			nameLabel.SetHAlign(gtk.ALIGN_START)
-			namePrompt.SetMarkup(fmt.Sprintf(promptFormat, "My name"))
+			namePrompt.SetMarkup(fmt.Sprintf(promptFormat, "Name"))
 			nameLabel.SetMarkup(fmt.Sprintf(valueFormat, shared.MyUserName))
 			return namePrompt, nameLabel
 		}

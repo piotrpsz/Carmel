@@ -17,6 +17,11 @@ const (
 	AppSubname = "Secure communicator"
 	appDir     = ".carmel"
 	keysDir    = "rsa_keys"
+
+	IPClipboardMark   = "IP:"
+	PortClipboardMark = "Port:"
+	NameClipboardMark = "Name:"
+	PINClipboardMark  = "PIN:"
 )
 
 var (
