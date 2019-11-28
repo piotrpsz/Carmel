@@ -1,7 +1,7 @@
 package mainWindow
 
 import (
-	"Carmel/chat"
+	"Carmel/dialog/connectTo"
 	"Carmel/dialog/dialogWithOneField"
 	"Carmel/dialog/waitForConnection"
 	"Carmel/rsakeys"
@@ -214,8 +214,15 @@ func (mw *MainWindow) connectToActionHandler() {
 		return
 	}
 
-	chatter := chat.New(mw.app)
-	chatter.ShowAll()
+	if dialog := connectTo.New(mw.app); dialog != nil {
+		defer dialog.Destroy()
+
+		dialog.ShowAll()
+		dialog.Run()
+	}
+
+	//chatter := chat.New(mw.app)
+	//chatter.ShowAll()
 }
 
 /********************************************************************
