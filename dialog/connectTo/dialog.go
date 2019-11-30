@@ -65,6 +65,7 @@ func New(app *gtk.Application) *Dialog {
 
 func (d *Dialog) ShowAll() {
 	d.self.ShowAll()
+	d.self.SetResizable(false)
 }
 
 func (d *Dialog) Run() gtk.ResponseType {
