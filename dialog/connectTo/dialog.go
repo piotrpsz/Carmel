@@ -12,8 +12,13 @@ import (
 const (
 	dialogTitle       = "connect to"
 	descriptionFormat = "<span style='italic' font_desc='9' foreground='#AAA555'>%s</span>"
-	promptFormat      = "<span font_desc='8' foreground='#999999'>%s:</span>"
 	description       = "Here you should enter (or copy from the clipboard)\nthe data received from the partner."
+	promptFormat      = "<span font_desc='8' foreground='#999999'>%s:</span>"
+
+	// button titles
+	startBtnTitle  = "start"
+	cancelBtnTitle = "cancel"
+	copyBtnTtile   = "copy"
 
 	// tooltips
 	startSetTooltip = "Connect to the server."
@@ -81,9 +86,9 @@ func (d *Dialog) Destroy() {
 }
 
 func (d *Dialog) createButtons() *gtk.Box {
-	if startBtn, err := gtk.ButtonNewWithLabel("start"); tr.IsOK(err) {
-		if cancelBtn, err := gtk.ButtonNewWithLabel("cancel"); tr.IsOK(err) {
-			if copyBtn, err := gtk.ButtonNewWithLabel("clipboard"); tr.IsOK(err) {
+	if startBtn, err := gtk.ButtonNewWithLabel(startBtnTitle); tr.IsOK(err) {
+		if cancelBtn, err := gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
+			if copyBtn, err := gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
 				if box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1); tr.IsOK(err) {
 					startBtn.SetTooltipText(startSetTooltip)
 					copyBtn.SetTooltipText(copyTooltip)
@@ -176,6 +181,7 @@ func (d *Dialog) createContent() *gtk.Grid {
 }
 
 func (d *Dialog) enableDisable(state bool) {
+
 	d.ipEntry.SetSensitive(state)
 	d.portEntry.SetSensitive(state)
 	d.nameEntry.SetSensitive(state)

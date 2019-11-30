@@ -15,15 +15,16 @@ const (
 	dialogTitle         = "wait for connection"
 	descriptionFormat   = "<span style='italic' font_desc='9' foreground='#AAA555'>%s</span>"
 	promptFormat        = "<span font_desc='8' foreground='#999999'>%s:</span>"
-	valueFormat         = "<span font_desc='11' foreground='#FFFFFF'>%s</span>"
+	enabledValueFormat  = "<span font_desc='11' foreground='#FFFFFF'>%s</span>"
+	disabledValueFormat = "<span font_desc='11' foreground='#999999'>%s</span>"
 	clipboardDataFormat = "IP: %s\nPort: %s\nName: %s\nPIN: %s\n"
-	description         = "The following data should be sent securely\nto your partner so that he can connect with you.\n "
+	description         = "The following data should be sent securely\nto your partner so that he can connect with you."
 
 	// button titles
 	startBtnTitle  = "start"
 	cancelBtnTitle = "cancel"
 	pinBtnTitle    = "pin"
-	copyBtnTtile   = "clipboard"
+	copyBtnTtile   = "copy"
 
 	// tooltips
 	pinTooltip    = "generate new random PIN number"
@@ -33,11 +34,16 @@ const (
 )
 
 type Dialog struct {
-	self      *gtk.Dialog
-	ipLabel   *gtk.Label
-	entryPort *gtk.Entry
-	nameLabel *gtk.Label
-	pinLabel  *gtk.Label
+	self              *gtk.Dialog
+	ipLabel           *gtk.Label
+	portEntry         *gtk.Entry
+	nameLabel         *gtk.Label
+	pinLabel          *gtk.Label
+	spinner           *gtk.Spinner
+	startBtn          *gtk.Button
+	pinBtn            *gtk.Button
+	copyBtn           *gtk.Button
+	connectionAttempt bool
 }
 
 func New(app *gtk.Application) *Dialog {
@@ -84,31 +90,46 @@ func (d *Dialog) Destroy() {
 }
 
 func (d *Dialog) createButtons() *gtk.Box {
-	if startBtn, err := gtk.ButtonNewWithLabel(startBtnTitle); tr.IsOK(err) {
+	var err error
+
+	if d.startBtn, err = gtk.ButtonNewWithLabel(startBtnTitle); tr.IsOK(err) {
 		if cancelBtn, err := gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
-			if copyBtn, err := gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
-				if pinBtn, err := gtk.ButtonNewWithLabel(pinBtnTitle); tr.IsOK(err) {
+			if d.copyBtn, err = gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
+				if d.pinBtn, err = gtk.ButtonNewWithLabel(pinBtnTitle); tr.IsOK(err) {
 					if box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1); tr.IsOK(err) {
 						// tooltips
-						startBtn.SetTooltipText(startTooltip)
+						d.startBtn.SetTooltipText(startTooltip)
+						d.copyBtn.SetTooltipText(copyTooltip)
+						d.pinBtn.SetTooltipText(pinTooltip)
 						cancelBtn.SetTooltipText(cancelTooltip)
-						copyBtn.SetTooltipText(copyTooltip)
-						pinBtn.SetTooltipText(pinTooltip)
 
 						// pack widgets
-						box.PackStart(startBtn, true, true, 2)
-						box.PackStart(pinBtn, true, true, 2)
-						box.PackStart(copyBtn, true, true, 2)
+						box.PackStart(d.startBtn, true, true, 2)
+						box.PackStart(d.pinBtn, true, true, 2)
+						box.PackStart(d.copyBtn, true, true, 2)
 						box.PackStart(cancelBtn, true, true, 2)
 
 						// handle button events
+						d.startBtn.Connect("clicked", func() {
+							d.enableDisable(false)
+							d.connectionAttempt = true
+							d.spinner.Start()
+						})
+
 						cancelBtn.Connect("clicked", func() {
+							if d.connectionAttempt {
+								d.connectionAttempt = false
+								d.enableDisable(true)
+								d.spinner.Stop()
+								d.portEntry.GrabFocusWithoutSelecting()
+								return
+							}
 							d.self.Response(gtk.RESPONSE_CANCEL)
 						})
-						copyBtn.Connect("clicked", func() {
+						d.copyBtn.Connect("clicked", func() {
 							if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
 								ip, _ := d.ipLabel.GetText()
-								port, _ := d.entryPort.GetText()
+								port, _ := d.portEntry.GetText()
 								name, _ := d.nameLabel.GetText()
 								pin, _ := d.pinLabel.GetText()
 
@@ -116,9 +137,9 @@ func (d *Dialog) createButtons() *gtk.Box {
 								clipboard.SetText(text)
 							}
 						})
-						pinBtn.Connect("clicked", func() {
+						d.pinBtn.Connect("clicked", func() {
 							if pin := createPIN(); pin != "" {
-								glib.IdleAdd(d.pinLabel.SetMarkup, fmt.Sprintf(valueFormat, pin))
+								glib.IdleAdd(d.pinLabel.SetMarkup, fmt.Sprintf(enabledValueFormat, pin))
 							}
 						})
 
@@ -141,20 +162,29 @@ func (d *Dialog) createContent() *gtk.Grid {
 			if portPrompt, portEntry := createPortWidgets(); portPrompt != nil {
 				if namePrompt, nameLabel := createUsernameWidgets(); namePrompt != nil {
 					if pinPrompt, pinLabel := createPINWidgets(); pinPrompt != nil {
-						d.ipLabel = ipLabel
-						d.entryPort = portEntry
-						d.nameLabel = nameLabel
-						d.pinLabel = pinLabel
+						if spinner, err := gtk.SpinnerNew(); tr.IsOK(err) {
+							d.ipLabel = ipLabel
+							d.portEntry = portEntry
+							d.nameLabel = nameLabel
+							d.pinLabel = pinLabel
+							d.spinner = spinner
 
-						grid.Attach(ipPrompt, 0, 0, 1, 1)
-						grid.Attach(ipLabel, 1, 0, 1, 1)
-						grid.Attach(portPrompt, 0, 2, 1, 1)
-						grid.Attach(portEntry, 1, 2, 1, 1)
-						grid.Attach(namePrompt, 0, 3, 1, 1)
-						grid.Attach(nameLabel, 1, 3, 1, 1)
-						grid.Attach(pinPrompt, 0, 4, 1, 1)
-						grid.Attach(pinLabel, 1, 4, 1, 1)
-						return grid
+							y := 0
+							grid.Attach(spinner, 0, y, 2, 1)
+							y++
+							grid.Attach(ipPrompt, 0, y, 1, 1)
+							grid.Attach(ipLabel, 1, y, 1, 1)
+							y++
+							grid.Attach(portPrompt, 0, y, 1, 1)
+							grid.Attach(portEntry, 1, y, 1, 1)
+							y++
+							grid.Attach(namePrompt, 0, y, 1, 1)
+							grid.Attach(nameLabel, 1, y, 1, 1)
+							y++
+							grid.Attach(pinPrompt, 0, y, 1, 1)
+							grid.Attach(pinLabel, 1, y, 1, 1)
+							return grid
+						}
 					}
 				}
 			}
@@ -163,13 +193,31 @@ func (d *Dialog) createContent() *gtk.Grid {
 	return nil
 }
 
+func (d *Dialog) enableDisable(state bool) {
+	format := disabledValueFormat
+	if state {
+		format = enabledValueFormat
+	}
+	text, _ := d.ipLabel.GetText()
+	d.ipLabel.SetMarkup(fmt.Sprintf(format, text))
+	text, _ = d.nameLabel.GetText()
+	d.nameLabel.SetMarkup(fmt.Sprintf(format, text))
+	text, _ = d.pinLabel.GetText()
+	d.pinLabel.SetMarkup(fmt.Sprintf(format, text))
+
+	d.portEntry.SetSensitive(state)
+	d.startBtn.SetSensitive(state)
+	d.copyBtn.SetSensitive(state)
+	d.pinBtn.SetSensitive(state)
+}
+
 func createIPWidgets() (*gtk.Label, *gtk.Label) {
 	if ipPrompt, err := gtk.LabelNew(""); tr.IsOK(err) {
 		if ipLabel, err := gtk.LabelNew(""); tr.IsOK(err) {
 			ipPrompt.SetHAlign(gtk.ALIGN_END)
 			ipLabel.SetHAlign(gtk.ALIGN_START)
 			ipPrompt.SetMarkup(fmt.Sprintf(promptFormat, "IP"))
-			ipLabel.SetMarkup(fmt.Sprintf(valueFormat, shared.MyIPAddr))
+			ipLabel.SetMarkup(fmt.Sprintf(enabledValueFormat, shared.MyIPAddr))
 
 			return ipPrompt, ipLabel
 		}
@@ -195,7 +243,7 @@ func createUsernameWidgets() (*gtk.Label, *gtk.Label) {
 			namePrompt.SetHAlign(gtk.ALIGN_END)
 			nameLabel.SetHAlign(gtk.ALIGN_START)
 			namePrompt.SetMarkup(fmt.Sprintf(promptFormat, "Name"))
-			nameLabel.SetMarkup(fmt.Sprintf(valueFormat, shared.MyUserName))
+			nameLabel.SetMarkup(fmt.Sprintf(enabledValueFormat, shared.MyUserName))
 			return namePrompt, nameLabel
 		}
 	}
@@ -209,7 +257,7 @@ func createPINWidgets() (*gtk.Label, *gtk.Label) {
 			pinLabel.SetHAlign(gtk.ALIGN_START)
 			pinPrompt.SetMarkup(fmt.Sprintf(promptFormat, "PIN"))
 			if pin := createPIN(); pin != "" {
-				pinLabel.SetMarkup(fmt.Sprintf(valueFormat, pin))
+				pinLabel.SetMarkup(fmt.Sprintf(enabledValueFormat, pin))
 			}
 			return pinPrompt, pinLabel
 		}
