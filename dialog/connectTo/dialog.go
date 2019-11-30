@@ -13,7 +13,7 @@ const (
 	dialogTitle       = "connect to"
 	descriptionFormat = "<span style='italic' font_desc='9' foreground='#AAA555'>%s</span>"
 	promptFormat      = "<span font_desc='8' foreground='#999999'>%s:</span>"
-	description       = "Here you should enter (or copy from the clipboard)\nthe data received from the partner.\n "
+	description       = "Here you should enter (or copy from the clipboard)\nthe data received from the partner."
 
 	// tooltips
 	startSetTooltip = "Connect to the server."
@@ -26,11 +26,15 @@ const (
 )
 
 type Dialog struct {
-	self      *gtk.Dialog
-	ipEntry   *gtk.Entry
-	portEntry *gtk.Entry
-	nameEntry *gtk.Entry
-	pinEntry  *gtk.Entry
+	self              *gtk.Dialog
+	spinner           *gtk.Spinner
+	ipEntry           *gtk.Entry
+	portEntry         *gtk.Entry
+	nameEntry         *gtk.Entry
+	pinEntry          *gtk.Entry
+	startBtn          *gtk.Button
+	copyBtn           *gtk.Button
+	connectionAttempt bool
 }
 
 func New(app *gtk.Application) *Dialog {
@@ -85,11 +89,25 @@ func (d *Dialog) createButtons() *gtk.Box {
 					copyBtn.SetTooltipText(copyTooltip)
 					cancelBtn.SetTooltipText(cancelTooltip)
 
+					d.startBtn = startBtn
+					d.copyBtn = copyBtn
+
 					box.PackStart(startBtn, true, true, 2)
 					box.PackStart(copyBtn, true, true, 2)
 					box.PackStart(cancelBtn, true, true, 2)
 
+					startBtn.Connect("clicked", func() {
+						d.connectionAttempt = true
+						d.spinner.Start()
+						d.enableDisable(false)
+					})
 					cancelBtn.Connect("clicked", func() {
+						if d.connectionAttempt {
+							d.connectionAttempt = false
+							d.spinner.Stop()
+							d.enableDisable(true)
+							return
+						}
 						d.self.Response(gtk.RESPONSE_CANCEL)
 					})
 					copyBtn.Connect("clicked", func() {
@@ -121,31 +139,50 @@ func (d *Dialog) createContent() *gtk.Grid {
 			if portPrompt, portEntry := createPortWidgets(); portPrompt != nil {
 				if namePrompt, nameEntry := createUsernameWidgets(); namePrompt != nil {
 					if pinPrompt, pinEntry := createPINWidgets(); pinPrompt != nil {
-						ipEntry.SetTooltipText(ipTooltip)
-						portEntry.SetTooltipText(portTooltip)
-						nameEntry.SetTooltipText(nameTooltip)
-						pinEntry.SetTooltipText(pinTooltip)
+						if spinner, err := gtk.SpinnerNew(); tr.IsOK(err) {
+							ipEntry.SetTooltipText(ipTooltip)
+							portEntry.SetTooltipText(portTooltip)
+							nameEntry.SetTooltipText(nameTooltip)
+							pinEntry.SetTooltipText(pinTooltip)
 
-						d.ipEntry = ipEntry
-						d.portEntry = portEntry
-						d.nameEntry = nameEntry
-						d.pinEntry = pinEntry
+							d.ipEntry = ipEntry
+							d.portEntry = portEntry
+							d.nameEntry = nameEntry
+							d.pinEntry = pinEntry
+							d.spinner = spinner
 
-						grid.Attach(ipPrompt, 0, 0, 1, 1)
-						grid.Attach(ipEntry, 1, 0, 1, 1)
-						grid.Attach(portPrompt, 0, 2, 1, 1)
-						grid.Attach(portEntry, 1, 2, 1, 1)
-						grid.Attach(namePrompt, 0, 3, 1, 1)
-						grid.Attach(nameEntry, 1, 3, 1, 1)
-						grid.Attach(pinPrompt, 0, 4, 1, 1)
-						grid.Attach(pinEntry, 1, 4, 1, 1)
-						return grid
+							y := 0
+							grid.Attach(d.spinner, 0, y, 2, 1)
+							y++
+							grid.Attach(ipPrompt, 0, y, 1, 1)
+							grid.Attach(ipEntry, 1, y, 1, 1)
+							y++
+							grid.Attach(portPrompt, 0, y, 1, 1)
+							grid.Attach(portEntry, 1, y, 1, 1)
+							y++
+							grid.Attach(namePrompt, 0, y, 1, 1)
+							grid.Attach(nameEntry, 1, y, 1, 1)
+							y++
+							grid.Attach(pinPrompt, 0, y, 1, 1)
+							grid.Attach(pinEntry, 1, y, 1, 1)
+							return grid
+						}
 					}
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func (d *Dialog) enableDisable(state bool) {
+	d.ipEntry.SetSensitive(state)
+	d.portEntry.SetSensitive(state)
+	d.nameEntry.SetSensitive(state)
+	d.pinEntry.SetSensitive(state)
+
+	d.startBtn.SetSensitive(state)
+	d.copyBtn.SetSensitive(state)
 }
 
 func (d *Dialog) useDataFromClipboard(text string) {
