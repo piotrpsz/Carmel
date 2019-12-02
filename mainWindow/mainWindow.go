@@ -182,6 +182,19 @@ func (mw *MainWindow) notDefinedUserNameInfo() {
 	}
 }
 
+func (mw *MainWindow) unknownIPAddress() {
+	const msg = "Not defined IP address.\n"
+	const msgSecondary = "Sorry, you can't currently connect to or receive calls from other Carmel users." +
+		"This is due to the fact that your IP address in unknown.\n\n" +
+		"Are you sure that you are connected to Internet?."
+
+	if dialog := gtk.MessageDialogNew(mw.app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, msg); dialog != nil {
+		defer dialog.Destroy()
+		dialog.FormatSecondaryText(msgSecondary)
+		dialog.Run()
+	}
+}
+
 /********************************************************************
 *                                                                   *
 *      W A I T   F O R   C O N N E C T I O N   H A N D L E R        *
@@ -193,7 +206,10 @@ func (mw *MainWindow) waitForConnection() {
 		mw.notDefinedUserNameInfo()
 		return
 	}
-
+	if shared.MyIPAddr == "" {
+		mw.unknownIPAddress()
+		return
+	}
 	if dialog := waitForConnection.New(mw.app); dialog != nil {
 		defer dialog.Destroy()
 
