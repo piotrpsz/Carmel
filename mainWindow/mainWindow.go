@@ -106,7 +106,7 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 			menu.Append("Wait for connection...", "custom.wait4connection")
 			menu.Append("Connect to...", "custom.connect_to")
 			menu.Append("Generate RSA keys...", "custom.rsa_keys")
-			menu.Append("Settings...", "custom.settings")
+			//menu.Append("Settings...", "custom.settings")
 			menu.Append("About...", "custom.about")
 			menu.Append("Quit", "app.quit")
 
@@ -131,8 +131,6 @@ func (mw *MainWindow) SetupMenu(headerBar *gtk.HeaderBar) bool {
 			wait4connectionAction := glib.SimpleActionNew("wait4connection", nil)
 			wait4connectionAction.Connect("activate", func() {
 				mw.waitForConnection()
-				//clipboard, _ := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD)
-				//clipboard.SetText("IDs: 34d8df, PIN: sjdh4")
 			})
 			//-------------------------------------------------------
 			customGroup.AddAction(wait4connectionAction)
