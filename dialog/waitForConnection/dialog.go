@@ -4,6 +4,7 @@ import (
 	"Carmel/secret"
 	"Carmel/shared"
 	"Carmel/shared/tr"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
@@ -44,6 +45,8 @@ type Dialog struct {
 	pinBtn            *gtk.Button
 	copyBtn           *gtk.Button
 	connectionAttempt bool
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 func New(app *gtk.Application) *Dialog {

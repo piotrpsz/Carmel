@@ -10,6 +10,7 @@
         <function importPath="fmt" name="Print" />
         <function importPath="github.com/gotk3/gotk3/glib" name="IdleAdd" />
         <function importPath="fmt" name="Fprintf" />
+        <function importPath="fmt" name="Fprint" />
       </functions>
       <methods>
         <method importPath="hash" receiver="Hash" name="Write" />

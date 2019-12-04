@@ -100,7 +100,6 @@ func ExistsFile(filePath string) bool {
 		}
 		return false
 	}
-
 	if fi.IsDir() {
 		return false
 	}
@@ -117,7 +116,6 @@ func ExistsDir(dirPath string) bool {
 		}
 		return false
 	}
-
 	if fi.IsDir() {
 		return true
 	}
