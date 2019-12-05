@@ -64,10 +64,10 @@ func Client(addr string, port, timeout int) *Stream {
 *                                                                   *
 ********************************************************************/
 
-func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) bool {
+func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) vtc.OperationStatusType {
 	defer wg.Done()
 
-	retChan := make(chan bool)
+	retChan := make(chan vtc.OperationStatusType)
 	defer close(retChan)
 	var iwg sync.WaitGroup
 
@@ -83,7 +83,7 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) bool {
 			log.Println("Stream.Run.Server:", ctx.Err())
 			cancel()
 			iwg.Wait()
-			return false
+			return vtc.Cancel
 		case retv := <-retChan:
 			return retv
 		}
@@ -99,20 +99,20 @@ func (s *Stream) Run(ctx context.Context, wg *sync.WaitGroup) bool {
 			log.Println("Stream.Run.Client:", ctx.Err())
 			cancel()
 			iwg.Wait()
-			return false
+			return vtc.Cancel
 		case retv := <-retChan:
 			iwg.Wait()
 			return retv
 		}
 
 	}
-	return false
+	return vtc.Error
 }
 
-func (s *Stream) runServer(ctx context.Context, wg *sync.WaitGroup, retChan chan<- bool) {
+func (s *Stream) runServer(ctx context.Context, wg *sync.WaitGroup, retChan chan<- vtc.OperationStatusType) {
 	defer wg.Done()
 
-	rc := make(chan bool)
+	rc := make(chan vtc.OperationStatusType)
 	go s.waitForClient(rc)
 
 	select {
@@ -123,7 +123,7 @@ func (s *Stream) runServer(ctx context.Context, wg *sync.WaitGroup, retChan chan
 	}
 }
 
-func (s *Stream) waitForClient(retChan chan<- bool) {
+func (s *Stream) waitForClient(retChan chan<- vtc.OperationStatusType) {
 	if hostname, err := os.Hostname(); tr.IsOK(err) {
 		if addr, err := net.ResolveIPAddr("ip", hostname); tr.IsOK(err) {
 			tcpAdrr := net.TCPAddr{IP: addr.IP, Port: s.ServerPort, Zone: addr.Zone}
@@ -136,7 +136,7 @@ func (s *Stream) waitForClient(retChan chan<- bool) {
 							if s.enigma.InitConnection(iface, vtc.Server) {
 								s.Requester = requester.New(iface, s.enigma)
 								s.Responder = responder.New(iface, s.enigma)
-								retChan <- true
+								retChan <- vtc.Ok
 								return
 							}
 						}
@@ -145,13 +145,13 @@ func (s *Stream) waitForClient(retChan chan<- bool) {
 			}
 		}
 	}
-	retChan <- false
+	retChan <- vtc.Error
 }
 
-func (s *Stream) runClient(ctx context.Context, wg *sync.WaitGroup, retChan chan<- bool) {
+func (s *Stream) runClient(ctx context.Context, wg *sync.WaitGroup, retChan chan<- vtc.OperationStatusType) {
 	defer wg.Done()
 
-	rc := make(chan bool)
+	rc := make(chan vtc.OperationStatusType)
 	ictx, cancel := context.WithCancel(context.Background())
 	var iwg sync.WaitGroup
 	iwg.Add(1)
@@ -164,7 +164,7 @@ func (s *Stream) runClient(ctx context.Context, wg *sync.WaitGroup, retChan chan
 		iwg.Wait()
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Println("Stream.runClient: timeout")
-			retChan <- false
+			retChan <- vtc.Timeout
 		} else {
 			log.Println("Stream.runClient:", ctx.Err())
 		}
@@ -174,7 +174,7 @@ func (s *Stream) runClient(ctx context.Context, wg *sync.WaitGroup, retChan chan
 	}
 }
 
-func (s *Stream) connectToServer(ctx context.Context, wg *sync.WaitGroup, retChan chan<- bool) {
+func (s *Stream) connectToServer(ctx context.Context, wg *sync.WaitGroup, retChan chan<- vtc.OperationStatusType) {
 	defer wg.Done()
 
 	if addr, err := net.ResolveIPAddr("ip", s.ServerAddr); tr.IsOK(err) {
@@ -186,7 +186,7 @@ func (s *Stream) connectToServer(ctx context.Context, wg *sync.WaitGroup, retCha
 			default:
 				if s.dial(tcpAddr) {
 					log.Println("connection with server established")
-					retChan <- true
+					retChan <- vtc.Ok
 					return
 				}
 				// następna próba za 5 sekund

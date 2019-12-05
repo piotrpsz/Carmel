@@ -4,6 +4,7 @@ import (
 	"Carmel/connector/session"
 	"Carmel/shared"
 	"Carmel/shared/tr"
+	"Carmel/shared/vtc"
 	"context"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
@@ -44,6 +45,7 @@ type Dialog struct {
 	pinEntry          *gtk.Entry
 	startBtn          *gtk.Button
 	copyBtn           *gtk.Button
+	cancelBtn         *gtk.Button
 	connectionAttempt bool
 	ssn               *session.Session
 	ctx               context.Context
@@ -106,6 +108,7 @@ func (d *Dialog) createButtons() *gtk.Box {
 
 					d.startBtn = startBtn
 					d.copyBtn = copyBtn
+					d.cancelBtn = cancelBtn
 
 					box.PackStart(startBtn, true, true, 2)
 					box.PackStart(copyBtn, true, true, 2)
@@ -180,12 +183,15 @@ func (d *Dialog) createContent() *gtk.Grid {
 }
 
 func (d *Dialog) enableDisable(state bool) {
-	glib.IdleAdd(d.ipEntry.SetSensitive, state)
-	glib.IdleAdd(d.portEntry.SetSensitive, state)
-	glib.IdleAdd(d.nameEntry.SetSensitive, state)
-	glib.IdleAdd(d.pinEntry.SetSensitive, state)
-	glib.IdleAdd(d.startBtn.SetSensitive, state)
-	glib.IdleAdd(d.copyBtn.SetSensitive, state)
+	glib.IdleAdd(func() {
+		d.ipEntry.SetSensitive(state)
+		d.portEntry.SetSensitive(state)
+		d.nameEntry.SetSensitive(state)
+		d.pinEntry.SetSensitive(state)
+		d.startBtn.SetSensitive(state)
+		d.copyBtn.SetSensitive(state)
+		d.cancelBtn.SetSensitive(true)
+	})
 }
 
 func (d *Dialog) useDataFromClipboard(text string) {
@@ -238,6 +244,9 @@ func (d *Dialog) validData() bool {
 }
 
 func (d *Dialog) start() {
+	tr.In()
+	defer tr.Out()
+
 	if d.validData() {
 		d.connectionAttempt = true
 		d.spinner.Start()
@@ -252,27 +261,48 @@ func (d *Dialog) start() {
 		if ssn := session.ClientNew(ip, portn, shared.ConnectionTimeout); ssn != nil {
 			d.ctx, d.cancel = context.WithCancel(context.Background())
 			go func() {
+				var failureReason string
+				var wg sync.WaitGroup
+
 				currentPort := ssn.In.ServerPort
-				d.wg.Add(1)
-				statIn := ssn.In.Run(d.ctx, &d.wg)
-				d.wg.Wait()
+				wg.Add(1)
+				statIn := ssn.In.Run(d.ctx, &wg)
+				wg.Wait()
 
-				if statIn {
+				switch statIn {
+				case vtc.Ok:
 					currentPort = ssn.Out.ServerPort
-					d.wg.Add(1)
-					statOut := ssn.Out.Run(d.ctx, &d.wg)
-					d.wg.Wait()
+					wg.Add(1)
+					statOut := ssn.Out.Run(d.ctx, &wg)
+					wg.Wait()
 
-					if statOut {
+					switch statOut {
+					case vtc.Ok:
 						// call chat window
 						tr.Info("OK")
 						return
+					case vtc.Timeout:
+						failureReason = "Timeout"
+					case vtc.Cancel:
+						failureReason = "Canceled"
+					default:
+						failureReason = "Unknown error"
 					}
+				case vtc.Timeout:
+					failureReason = "Timeout"
+				case vtc.Cancel:
+					failureReason = "Canceled"
+				default:
+					failureReason = "Unknown error"
 				}
-				d.stop()
+
 				glib.IdleAdd(func() {
-					if dialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, "Timeout"); dialog != nil {
-						defer dialog.Destroy()
+					d.spinner.Stop()
+					if dialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, failureReason); dialog != nil {
+						defer func() {
+							dialog.Destroy()
+							d.continueEdition()
+						}()
 						dialog.FormatSecondaryText(fmt.Sprintf("Connection failed with:  %s:%d", ip, currentPort))
 						dialog.Run()
 					}
@@ -285,11 +315,19 @@ func (d *Dialog) start() {
 	}
 }
 
+func (d *Dialog) continueEdition() {
+	d.connectionAttempt = false
+	d.enableDisable(true)
+	return
+}
+
 func (d *Dialog) stop() {
 	if d.connectionAttempt {
-		d.connectionAttempt = false
-		d.spinner.Stop()
-		d.enableDisable(true)
+		glib.IdleAdd(func() {
+			d.cancelBtn.SetSensitive(false)
+			d.spinner.Stop()
+		})
+		d.cancel()
 		return
 	}
 	d.self.Response(gtk.RESPONSE_CANCEL)
