@@ -8,7 +8,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -22,6 +25,8 @@ const (
 	PortClipboardMark = "Port:"
 	NameClipboardMark = "Name:"
 	PINClipboardMark  = "PIN:"
+
+	ConnectionTimeout = 30 // in seconds (1 min)
 )
 
 var (
@@ -57,6 +62,63 @@ func AreFloat32Equal(a, b float32) bool {
 	epsilon := 0.000_01
 	diff := float64(a) - float64(b)
 	return math.Abs(diff) < epsilon
+}
+
+func IsValidIPAddress(text string) bool {
+	if items := strings.Split(text, "."); len(items) == 4 {
+		for _, value := range items {
+			if len(value) > 4 {
+				return false
+			}
+			if !OnlyDigits(value) {
+				return false
+			}
+			if v, err := strconv.Atoi(value); !tr.IsOK(err) || v > 255 {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func IsValidName(text string) bool {
+	if text == "" {
+		return false
+	}
+	runes := []rune(text)
+	for _, c := range runes {
+		if !unicode.IsLower(c) && !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	if unicode.IsDigit(runes[0]) {
+		return false
+	}
+	return true
+}
+
+func OnlyDigits(text string) bool {
+	if text == "" {
+		return false
+	}
+	for _, c := range text {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func OnlyHexDigits(text string) bool {
+	hd := []*unicode.RangeTable{unicode.Hex_Digit}
+
+	for _, c := range text {
+		if !unicode.IsOneOf(hd, c) {
+			return false
+		}
+	}
+	return true
 }
 
 /********************************************************************
