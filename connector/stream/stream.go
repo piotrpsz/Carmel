@@ -25,14 +25,14 @@ type Stream struct {
 	enigma     *enigma.Enigma
 	Responder  *responder.Responder
 	Requester  *requester.Requester
-	serverAddr string // client only
-	serverPort int    // server & client
+	ServerAddr string // client only
+	ServerPort int    // server & client
 	timeout    int    // client only
 }
 
 func Server(port int) *Stream {
 	if e := enigma.New(); e != nil {
-		s := &Stream{role: vtc.Server, serverPort: port}
+		s := &Stream{role: vtc.Server, ServerPort: port}
 		if s.initKeys() {
 			return s
 		}
@@ -53,7 +53,7 @@ func (s *Stream) initKeys() bool {
 
 func Client(addr string, port, timeout int) *Stream {
 	if e := enigma.New(); e != nil {
-		return &Stream{role: vtc.Client, serverAddr: addr, serverPort: port, enigma: e, timeout: timeout}
+		return &Stream{role: vtc.Client, ServerAddr: addr, ServerPort: port, enigma: e, timeout: timeout}
 	}
 	return nil
 }
@@ -126,7 +126,7 @@ func (s *Stream) runServer(ctx context.Context, wg *sync.WaitGroup, retChan chan
 func (s *Stream) waitForClient(retChan chan<- bool) {
 	if hostname, err := os.Hostname(); tr.IsOK(err) {
 		if addr, err := net.ResolveIPAddr("ip", hostname); tr.IsOK(err) {
-			tcpAdrr := net.TCPAddr{IP: addr.IP, Port: s.serverPort, Zone: addr.Zone}
+			tcpAdrr := net.TCPAddr{IP: addr.IP, Port: s.ServerPort, Zone: addr.Zone}
 			fmt.Printf("Server: %s:%d\n", tcpAdrr.IP, tcpAdrr.Port)
 
 			if listener, err := net.ListenTCP("tcp", &tcpAdrr); tr.IsOK(err) {
@@ -177,8 +177,8 @@ func (s *Stream) runClient(ctx context.Context, wg *sync.WaitGroup, retChan chan
 func (s *Stream) connectToServer(ctx context.Context, wg *sync.WaitGroup, retChan chan<- bool) {
 	defer wg.Done()
 
-	if addr, err := net.ResolveIPAddr("ip", s.serverAddr); tr.IsOK(err) {
-		tcpAddr := net.TCPAddr{IP: addr.IP, Port: s.serverPort, Zone: addr.Zone}
+	if addr, err := net.ResolveIPAddr("ip", s.ServerAddr); tr.IsOK(err) {
+		tcpAddr := net.TCPAddr{IP: addr.IP, Port: s.ServerPort, Zone: addr.Zone}
 		for {
 			select {
 			case <-ctx.Done():
