@@ -1,12 +1,17 @@
 package connectTo
 
 import (
+	"Carmel/connector/session"
 	"Carmel/shared"
 	"Carmel/shared/tr"
+	"context"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -40,6 +45,10 @@ type Dialog struct {
 	startBtn          *gtk.Button
 	copyBtn           *gtk.Button
 	connectionAttempt bool
+	ssn               *session.Session
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
 }
 
 func New(app *gtk.Application) *Dialog {
@@ -62,6 +71,7 @@ func New(app *gtk.Application) *Dialog {
 							box.PackStart(contentGrid, true, true, 0)
 							box.PackStart(separator, true, true, 0)
 							box.PackStart(buttonsBox, false, false, 0)
+
 							return instance
 						}
 					}
@@ -101,20 +111,9 @@ func (d *Dialog) createButtons() *gtk.Box {
 					box.PackStart(copyBtn, true, true, 2)
 					box.PackStart(cancelBtn, true, true, 2)
 
-					startBtn.Connect("clicked", func() {
-						d.connectionAttempt = true
-						d.spinner.Start()
-						d.enableDisable(false)
-					})
-					cancelBtn.Connect("clicked", func() {
-						if d.connectionAttempt {
-							d.connectionAttempt = false
-							d.spinner.Stop()
-							d.enableDisable(true)
-							return
-						}
-						d.self.Response(gtk.RESPONSE_CANCEL)
-					})
+					startBtn.Connect("clicked", d.start)
+					cancelBtn.Connect("clicked", d.stop)
+
 					copyBtn.Connect("clicked", func() {
 						if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
 							if clipboard.WaitIsTextAvailable() {
@@ -181,14 +180,12 @@ func (d *Dialog) createContent() *gtk.Grid {
 }
 
 func (d *Dialog) enableDisable(state bool) {
-
-	d.ipEntry.SetSensitive(state)
-	d.portEntry.SetSensitive(state)
-	d.nameEntry.SetSensitive(state)
-	d.pinEntry.SetSensitive(state)
-
-	d.startBtn.SetSensitive(state)
-	d.copyBtn.SetSensitive(state)
+	glib.IdleAdd(d.ipEntry.SetSensitive, state)
+	glib.IdleAdd(d.portEntry.SetSensitive, state)
+	glib.IdleAdd(d.nameEntry.SetSensitive, state)
+	glib.IdleAdd(d.pinEntry.SetSensitive, state)
+	glib.IdleAdd(d.startBtn.SetSensitive, state)
+	glib.IdleAdd(d.copyBtn.SetSensitive, state)
 }
 
 func (d *Dialog) useDataFromClipboard(text string) {
@@ -215,6 +212,87 @@ func (d *Dialog) useDataFromClipboard(text string) {
 			d.pinEntry.SetText(strings.TrimSpace(value))
 		}
 	}
+}
+
+func (d *Dialog) validData() bool {
+	if text, err := d.ipEntry.GetText(); !tr.IsOK(err) || !shared.IsValidIPAddress(text) {
+		d.ipEntry.GrabFocus()
+		return false
+	}
+
+	if text, err := d.portEntry.GetText(); !tr.IsOK(err) || !shared.OnlyDigits(text) {
+		d.portEntry.GrabFocus()
+		return false
+	}
+
+	if text, err := d.nameEntry.GetText(); !tr.IsOK(err) || !shared.IsValidName(text) {
+		d.nameEntry.GrabFocus()
+		return false
+	}
+
+	if text, err := d.pinEntry.GetText(); !tr.IsOK(err) || !shared.OnlyHexDigits(text) {
+		d.pinEntry.GrabFocus()
+		return false
+	}
+	return true
+}
+
+func (d *Dialog) start() {
+	if d.validData() {
+		d.connectionAttempt = true
+		d.spinner.Start()
+		d.enableDisable(false)
+
+		ip, _ := d.ipEntry.GetText()
+		port, _ := d.portEntry.GetText()
+		//name,_ := d.nameEntry.GetText()
+		//pin,_  := d.pinEntry.GetText()
+		portn, _ := strconv.Atoi(port)
+
+		if ssn := session.ClientNew(ip, portn, shared.ConnectionTimeout); ssn != nil {
+			d.ctx, d.cancel = context.WithCancel(context.Background())
+			go func() {
+				currentPort := ssn.In.ServerPort
+				d.wg.Add(1)
+				statIn := ssn.In.Run(d.ctx, &d.wg)
+				d.wg.Wait()
+
+				if statIn {
+					currentPort = ssn.Out.ServerPort
+					d.wg.Add(1)
+					statOut := ssn.Out.Run(d.ctx, &d.wg)
+					d.wg.Wait()
+
+					if statOut {
+						// call chat window
+						tr.Info("OK")
+						return
+					}
+				}
+				d.stop()
+				glib.IdleAdd(func() {
+					if dialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, "Timeout"); dialog != nil {
+						defer dialog.Destroy()
+						dialog.FormatSecondaryText(fmt.Sprintf("Connection failed with:  %s:%d", ip, currentPort))
+						dialog.Run()
+					}
+				})
+				tr.Error("Not connected")
+			}()
+			return
+		}
+		d.stop()
+	}
+}
+
+func (d *Dialog) stop() {
+	if d.connectionAttempt {
+		d.connectionAttempt = false
+		d.spinner.Stop()
+		d.enableDisable(true)
+		return
+	}
+	d.self.Response(gtk.RESPONSE_CANCEL)
 }
 
 func createIPWidgets() (*gtk.Label, *gtk.Entry) {
