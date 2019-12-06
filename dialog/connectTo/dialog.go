@@ -340,7 +340,6 @@ func (d *Dialog) start() {
 func (d *Dialog) continueEdition() {
 	d.connectionAttempt = false
 	d.enableDisable(true)
-	return
 }
 
 func (d *Dialog) stop() {

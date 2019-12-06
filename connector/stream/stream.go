@@ -60,7 +60,7 @@ type Stream struct {
 
 func Server(port int) *Stream {
 	if e := enigma.New(); e != nil {
-		s := &Stream{role: vtc.Server, ServerPort: port}
+		s := &Stream{role: vtc.Server, ServerPort: port, enigma: e}
 		if s.initKeys() {
 			return s
 		}

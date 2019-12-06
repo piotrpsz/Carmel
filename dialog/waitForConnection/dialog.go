@@ -29,15 +29,19 @@
 package waitForConnection
 
 import (
+	"Carmel/connector/session"
 	"Carmel/secret"
 	"Carmel/shared"
 	"Carmel/shared/tr"
+	"Carmel/shared/vtc"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"strconv"
+	"sync"
 )
 
 const (
@@ -60,6 +64,10 @@ const (
 	cancelTooltip = "break action and return"
 	copyTooltip   = "copy data to the clipboard"
 	startTooltip  = "start waiting for connection"
+
+	connectionCanceled  = "Canceled"
+	connectionError     = "Unknown error"
+	connectionMsgFormat = "Connection failed on port:  %d"
 )
 
 type Dialog struct {
@@ -72,6 +80,7 @@ type Dialog struct {
 	startBtn          *gtk.Button
 	pinBtn            *gtk.Button
 	copyBtn           *gtk.Button
+	cancelBtn         *gtk.Button
 	connectionAttempt bool
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -124,7 +133,7 @@ func (d *Dialog) createButtons() *gtk.Box {
 	var err error
 
 	if d.startBtn, err = gtk.ButtonNewWithLabel(startBtnTitle); tr.IsOK(err) {
-		if cancelBtn, err := gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
+		if d.cancelBtn, err = gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
 			if d.copyBtn, err = gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
 				if d.pinBtn, err = gtk.ButtonNewWithLabel(pinBtnTitle); tr.IsOK(err) {
 					if box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1); tr.IsOK(err) {
@@ -132,42 +141,19 @@ func (d *Dialog) createButtons() *gtk.Box {
 						d.startBtn.SetTooltipText(startTooltip)
 						d.copyBtn.SetTooltipText(copyTooltip)
 						d.pinBtn.SetTooltipText(pinTooltip)
-						cancelBtn.SetTooltipText(cancelTooltip)
+						d.cancelBtn.SetTooltipText(cancelTooltip)
 
 						// pack widgets
 						box.PackStart(d.startBtn, true, true, 2)
 						box.PackStart(d.pinBtn, true, true, 2)
 						box.PackStart(d.copyBtn, true, true, 2)
-						box.PackStart(cancelBtn, true, true, 2)
+						box.PackStart(d.cancelBtn, true, true, 2)
 
 						// handle button events
-						d.startBtn.Connect("clicked", func() {
-							d.enableDisable(false)
-							d.connectionAttempt = true
-							d.spinner.Start()
-						})
+						d.startBtn.Connect("clicked", d.start)
+						d.cancelBtn.Connect("clicked", d.stop)
+						d.copyBtn.Connect("clicked", d.copy)
 
-						cancelBtn.Connect("clicked", func() {
-							if d.connectionAttempt {
-								d.connectionAttempt = false
-								d.enableDisable(true)
-								d.spinner.Stop()
-								d.portEntry.GrabFocusWithoutSelecting()
-								return
-							}
-							d.self.Response(gtk.RESPONSE_CANCEL)
-						})
-						d.copyBtn.Connect("clicked", func() {
-							if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
-								ip, _ := d.ipLabel.GetText()
-								port, _ := d.portEntry.GetText()
-								name, _ := d.nameLabel.GetText()
-								pin, _ := d.pinLabel.GetText()
-
-								text := fmt.Sprintf(clipboardDataFormat, ip, port, name, pin)
-								clipboard.SetText(text)
-							}
-						})
 						d.pinBtn.Connect("clicked", func() {
 							if pin := createPIN(); pin != "" {
 								glib.IdleAdd(d.pinLabel.SetMarkup, fmt.Sprintf(enabledValueFormat, pin))
@@ -224,22 +210,134 @@ func (d *Dialog) createContent() *gtk.Grid {
 	return nil
 }
 
-func (d *Dialog) enableDisable(state bool) {
-	format := disabledValueFormat
-	if state {
-		format = enabledValueFormat
+func (d *Dialog) validData() bool {
+	if text, err := d.portEntry.GetText(); !tr.IsOK(err) || !shared.OnlyDigits(text) {
+		d.portEntry.GrabFocus()
+		return false
 	}
-	text, _ := d.ipLabel.GetText()
-	d.ipLabel.SetMarkup(fmt.Sprintf(format, text))
-	text, _ = d.nameLabel.GetText()
-	d.nameLabel.SetMarkup(fmt.Sprintf(format, text))
-	text, _ = d.pinLabel.GetText()
-	d.pinLabel.SetMarkup(fmt.Sprintf(format, text))
+	return true
+}
 
-	d.portEntry.SetSensitive(state)
-	d.startBtn.SetSensitive(state)
-	d.copyBtn.SetSensitive(state)
-	d.pinBtn.SetSensitive(state)
+// Serwer rozpoczyna nasłuchiwanie nadchodzących połączeń od klienta.
+func (d *Dialog) start() {
+	if !d.validData() {
+		return
+	}
+	d.connectionAttempt = true
+	d.spinner.Start()
+	d.enableDisable(false)
+
+	port, _ := d.portEntry.GetText()
+	portn, _ := strconv.Atoi(port)
+
+	if ssn := session.ServerNew(portn); ssn != nil {
+		d.ctx, d.cancel = context.WithCancel(context.Background())
+		go func() {
+			var (
+				failureReason string
+				wg            sync.WaitGroup
+			)
+
+			currentPort := ssn.In.ServerPort
+			wg.Add(1)
+			state := ssn.In.Run(d.ctx, &wg)
+			wg.Wait()
+
+			if state == vtc.Ok {
+				currentPort = ssn.Out.ServerPort
+				wg.Add(1)
+				state = ssn.Out.Run(d.ctx, &wg)
+				wg.Wait()
+
+				if state == vtc.Ok {
+					// TODO: create/display chat window
+					fmt.Println("OK")
+					return
+				}
+			}
+
+			switch state {
+			case vtc.Cancel:
+				failureReason = connectionCanceled
+			default:
+				failureReason = connectionError
+			}
+
+			glib.IdleAdd(func() {
+				d.spinner.Stop()
+				if errDialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, failureReason); errDialog != nil {
+					defer func() {
+						errDialog.Destroy()
+						d.continueEdition()
+					}()
+					errDialog.FormatSecondaryText(fmt.Sprintf(connectionMsgFormat, currentPort))
+					errDialog.Run()
+				}
+			})
+		}()
+		return
+	}
+
+	d.stop()
+}
+
+func (d *Dialog) continueEdition() {
+	d.connectionAttempt = false
+	d.enableDisable(true)
+}
+
+// Przerywa nasłuchiwanie serwera.
+// Użytkownik nacisnął kliwisz 'Cancel'.
+func (d *Dialog) stop() {
+	if d.connectionAttempt {
+		glib.IdleAdd(func() {
+			d.spinner.Stop()
+			d.cancelBtn.SetSensitive(false)
+		})
+		d.cancel()
+		return
+	}
+	d.self.Response(gtk.RESPONSE_CANCEL)
+}
+
+// Kopiuje zawartość pół edycyjnych do schowka w określonym formacie.
+// Ze schowka użytkownik może skopiować te dane np. do e-maila i je przesłać.
+func (d *Dialog) copy() {
+	if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
+		if ip, err := d.ipLabel.GetText(); tr.IsOK(err) {
+			if port, err := d.portEntry.GetText(); tr.IsOK(err) {
+				if name, err := d.nameLabel.GetText(); tr.IsOK(err) {
+					if pin, err := d.pinLabel.GetText(); tr.IsOK(err) {
+						text := fmt.Sprintf(clipboardDataFormat, ip, port, name, pin)
+						clipboard.SetText(text)
+					}
+				}
+			}
+		}
+	}
+}
+
+// Włączenie/wyłączenie możliwości edycji.
+func (d *Dialog) enableDisable(state bool) {
+	glib.IdleAdd(func() {
+		format := disabledValueFormat
+		if state {
+			format = enabledValueFormat
+		}
+		text, _ := d.ipLabel.GetText()
+		d.ipLabel.SetMarkup(fmt.Sprintf(format, text))
+		text, _ = d.nameLabel.GetText()
+		d.nameLabel.SetMarkup(fmt.Sprintf(format, text))
+		text, _ = d.pinLabel.GetText()
+		d.pinLabel.SetMarkup(fmt.Sprintf(format, text))
+
+		d.portEntry.SetSensitive(state)
+		d.startBtn.SetSensitive(state)
+		d.copyBtn.SetSensitive(state)
+		d.pinBtn.SetSensitive(state)
+		d.cancelBtn.SetSensitive(true)
+		d.portEntry.GrabFocusWithoutSelecting()
+	})
 }
 
 func createIPWidgets() (*gtk.Label, *gtk.Label) {
