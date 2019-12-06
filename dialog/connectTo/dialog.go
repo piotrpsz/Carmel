@@ -1,3 +1,31 @@
+/*
+ * BSD 2-Clause License
+ *
+ *	Copyright (c) 2019, Piotr Pszczółkowski
+ *	All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package connectTo
 
 import (
@@ -34,6 +62,11 @@ const (
 	portTooltip     = "port number on which the server listens"
 	nameTooltip     = "user name to which you would like to connect"
 	pinTooltip      = "pin needed to establish connection to the server"
+
+	connectionTimeout   = "Timeout"
+	connectionCanceled  = "Canceled"
+	connectionError     = "Unknown error"
+	connectionMsgFormat = "Connection failed with:  %s:%d"
 )
 
 type Dialog struct {
@@ -50,7 +83,6 @@ type Dialog struct {
 	ssn               *session.Session
 	ctx               context.Context
 	cancel            context.CancelFunc
-	wg                sync.WaitGroup
 }
 
 func New(app *gtk.Application) *Dialog {
@@ -102,6 +134,7 @@ func (d *Dialog) createButtons() *gtk.Box {
 		if cancelBtn, err := gtk.ButtonNewWithLabel(cancelBtnTitle); tr.IsOK(err) {
 			if copyBtn, err := gtk.ButtonNewWithLabel(copyBtnTtile); tr.IsOK(err) {
 				if box, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 1); tr.IsOK(err) {
+
 					startBtn.SetTooltipText(startSetTooltip)
 					copyBtn.SetTooltipText(copyTooltip)
 					cancelBtn.SetTooltipText(cancelTooltip)
@@ -116,21 +149,11 @@ func (d *Dialog) createButtons() *gtk.Box {
 
 					startBtn.Connect("clicked", d.start)
 					cancelBtn.Connect("clicked", d.stop)
-
-					copyBtn.Connect("clicked", func() {
-						if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
-							if clipboard.WaitIsTextAvailable() {
-								if text, err := clipboard.WaitForText(); tr.IsOK(err) {
-									d.useDataFromClipboard(strings.TrimSpace(text))
-								}
-							}
-						}
-					})
+					copyBtn.Connect("clicked", d.copy)
 
 					return box
 				}
 			}
-
 		}
 	}
 	return nil
@@ -225,17 +248,14 @@ func (d *Dialog) validData() bool {
 		d.ipEntry.GrabFocus()
 		return false
 	}
-
 	if text, err := d.portEntry.GetText(); !tr.IsOK(err) || !shared.OnlyDigits(text) {
 		d.portEntry.GrabFocus()
 		return false
 	}
-
 	if text, err := d.nameEntry.GetText(); !tr.IsOK(err) || !shared.IsValidName(text) {
 		d.nameEntry.GrabFocus()
 		return false
 	}
-
 	if text, err := d.pinEntry.GetText(); !tr.IsOK(err) || !shared.OnlyHexDigits(text) {
 		d.pinEntry.GrabFocus()
 		return false
@@ -243,10 +263,17 @@ func (d *Dialog) validData() bool {
 	return true
 }
 
-func (d *Dialog) start() {
-	tr.In()
-	defer tr.Out()
+func (d *Dialog) copy() {
+	if clipboard, err := gtk.ClipboardGet(gdk.SELECTION_CLIPBOARD); tr.IsOK(err) {
+		if clipboard.WaitIsTextAvailable() {
+			if text, err := clipboard.WaitForText(); tr.IsOK(err) {
+				d.useDataFromClipboard(strings.TrimSpace(text))
+			}
+		}
+	}
+}
 
+func (d *Dialog) start() {
 	if d.validData() {
 		d.connectionAttempt = true
 		d.spinner.Start()
@@ -266,34 +293,29 @@ func (d *Dialog) start() {
 
 				currentPort := ssn.In.ServerPort
 				wg.Add(1)
-				statIn := ssn.In.Run(d.ctx, &wg)
+				state := ssn.In.Run(d.ctx, &wg)
 				wg.Wait()
 
-				switch statIn {
-				case vtc.Ok:
+				if state == vtc.Ok {
 					currentPort = ssn.Out.ServerPort
 					wg.Add(1)
-					statOut := ssn.Out.Run(d.ctx, &wg)
+					state = ssn.Out.Run(d.ctx, &wg)
 					wg.Wait()
 
-					switch statOut {
-					case vtc.Ok:
-						// call chat window
-						tr.Info("OK")
+					if state == vtc.Ok {
+						// TODO: create/diaplay chat window
+						fmt.Println("OK")
 						return
-					case vtc.Timeout:
-						failureReason = "Timeout"
-					case vtc.Cancel:
-						failureReason = "Canceled"
-					default:
-						failureReason = "Unknown error"
 					}
+				}
+
+				switch state {
 				case vtc.Timeout:
-					failureReason = "Timeout"
+					failureReason = connectionTimeout
 				case vtc.Cancel:
-					failureReason = "Canceled"
+					failureReason = connectionCanceled
 				default:
-					failureReason = "Unknown error"
+					failureReason = connectionError
 				}
 
 				glib.IdleAdd(func() {
@@ -303,7 +325,7 @@ func (d *Dialog) start() {
 							dialog.Destroy()
 							d.continueEdition()
 						}()
-						dialog.FormatSecondaryText(fmt.Sprintf("Connection failed with:  %s:%d", ip, currentPort))
+						dialog.FormatSecondaryText(fmt.Sprintf(connectionMsgFormat, ip, currentPort))
 						dialog.Run()
 					}
 				})
