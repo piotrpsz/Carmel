@@ -1,3 +1,31 @@
+/*
+ * BSD 2-Clause License
+ *
+ *	Copyright (c) 2019, Piotr Pszczółkowski
+ *	All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package chat
 
 import (
@@ -20,28 +48,27 @@ const (
 )
 
 var (
-	ownNameTagData = map[string]interface{} {
+	ownNameTagData = map[string]interface{}{
 		"foreground": "#FFFAAA",
-		"style"     : pango.STYLE_ITALIC,
-		"weight"    : pango.WEIGHT_BOLD,
-		"font"      : "Italic 10",		//"Sans Italic 12"
+		"style":      pango.STYLE_ITALIC,
+		"weight":     pango.WEIGHT_BOLD,
+		"font":       "Italic 10", //"Sans Italic 12"
 	}
-	ownMessageData = map[string]interface{} {
+	ownMessageData = map[string]interface{}{
 		"foreground": "#999999",
 	}
 
-	otherNameTagData = map[string]interface{} {
-		"foreground"   : "#AAAFFF",
-		"style"        : pango.STYLE_ITALIC,
-		"weight"       : pango.WEIGHT_BOLD,
-		"font"         : "Italic 10",		//"Sans Italic 12"
+	otherNameTagData = map[string]interface{}{
+		"foreground":    "#AAAFFF",
+		"style":         pango.STYLE_ITALIC,
+		"weight":        pango.WEIGHT_BOLD,
+		"font":          "Italic 10", //"Sans Italic 12"
 		"justification": gtk.JUSTIFY_RIGHT,
 	}
-	otherMessageData = map[string]interface{} {
-		"foreground"   : "#FFFFFF",
+	otherMessageData = map[string]interface{}{
+		"foreground":    "#FFFFFF",
 		"justification": gtk.JUSTIFY_RIGHT,
 	}
-
 )
 
 type Window struct {
@@ -67,7 +94,7 @@ type Window struct {
 
 func New(app *gtk.Application) *Window {
 	if win, err := gtk.ApplicationWindowNew(app); tr.IsOK(err) {
-		w := &Window{app:app, win:win}
+		w := &Window{app: app, win: win}
 		if headerBar := w.createHeaderBar(); headerBar != nil {
 			if menuButton := w.createMenu(); menuButton != nil {
 				headerBar.PackEnd(menuButton)
@@ -228,8 +255,8 @@ func (w *Window) appendTextToBrowser(msg message.ChatMessage) {
 		messageTag = w.myMessageTag
 	}
 
-	w.browserBuffer.InsertWithTag(w.browserBuffer.GetEndIter(), msg.Name + "\n", nameTag)
-	w.browserBuffer.InsertWithTag(w.browserBuffer.GetEndIter(), msg.Text + "\n\n", messageTag)
+	w.browserBuffer.InsertWithTag(w.browserBuffer.GetEndIter(), msg.Name+"\n", nameTag)
+	w.browserBuffer.InsertWithTag(w.browserBuffer.GetEndIter(), msg.Text+"\n\n", messageTag)
 
 	mark := w.browserBuffer.GetMark("insert")
 	w.browser.ScrollToMark(mark, 0.0, true, 0.0, 1.0)
@@ -240,11 +267,11 @@ func (w *Window) browserLoop(inChan <-chan message.ChatMessage) {
 
 	for {
 		select {
-			case <- w.ctx.Done():
-				fmt.Println(w.ctx.Err())
-				return
-			case msg := <-inChan:
-				w.appendTextToBrowser(msg)
+		case <-w.ctx.Done():
+			fmt.Println(w.ctx.Err())
+			return
+		case msg := <-inChan:
+			w.appendTextToBrowser(msg)
 		}
 	}
 }

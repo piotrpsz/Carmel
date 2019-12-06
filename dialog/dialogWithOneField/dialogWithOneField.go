@@ -1,3 +1,31 @@
+/*
+ * BSD 2-Clause License
+ *
+ *	Copyright (c) 2019, Piotr Pszczółkowski
+ *	All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 package dialogWithOneField
 
 import (
@@ -9,6 +37,7 @@ import (
 )
 
 type ValidationResult uint8
+
 const (
 	Ok ValidationResult = iota << 1
 	EmptyStringNotAllowed
@@ -32,7 +61,7 @@ type DialogWithOneField struct {
 
 const (
 	descriptionFormat = "<span style='italic' font_desc='9' foreground='#AAA555'>%s</span>"
-	promptFormat = "<span font_desc='10' foreground='#999999'>%s</span>"
+	promptFormat      = "<span font_desc='10' foreground='#999999'>%s</span>"
 )
 
 func New(app *gtk.Application, validateFn func(string) ValidationResult) *DialogWithOneField {
@@ -76,7 +105,7 @@ func (dialog *DialogWithOneField) buttonArea(validateFn func(string) ValidationR
 					dialog.self.Response(gtk.RESPONSE_CANCEL)
 				})
 				acceptButton.Connect("clicked", func() {
-					text,_ := dialog.entry.GetText()
+					text, _ := dialog.entry.GetText()
 					result := validateFn(text)
 					if result == Ok {
 						dialog.self.Response(gtk.RESPONSE_ACCEPT)
@@ -98,7 +127,7 @@ func (dialog *DialogWithOneField) buttonArea(validateFn func(string) ValidationR
 					dialog.entry.GrabFocus()
 				})
 
-				box.PackEnd(cancelButton,false, false, 2)
+				box.PackEnd(cancelButton, false, false, 2)
 				box.PackEnd(acceptButton, false, false, 2)
 				return box
 			}
