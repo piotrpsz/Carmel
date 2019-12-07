@@ -281,11 +281,11 @@ func (d *Dialog) start() {
 
 		ip, _ := d.ipEntry.GetText()
 		port, _ := d.portEntry.GetText()
-		//name,_ := d.nameEntry.GetText()
+		name, _ := d.nameEntry.GetText()
 		//pin,_  := d.pinEntry.GetText()
 		portn, _ := strconv.Atoi(port)
 
-		if ssn := session.ClientNew(ip, portn, shared.ConnectionTimeout); ssn != nil {
+		if ssn := session.ClientNew(ip, portn, name, shared.ConnectionTimeout); ssn != nil {
 			d.ctx, d.cancel = context.WithCancel(context.Background())
 			go func() {
 				var failureReason string
@@ -303,8 +303,12 @@ func (d *Dialog) start() {
 					wg.Wait()
 
 					if state == vtc.Ok {
+						fmt.Println("Connection established")
+
+						// Wysłanie dnaych logowania
+
 						// TODO: create/diaplay chat window
-						fmt.Println("OK")
+
 						return
 					}
 				}

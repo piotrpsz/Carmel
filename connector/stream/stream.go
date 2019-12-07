@@ -58,17 +58,11 @@ type Stream struct {
 	timeout    int    // client only
 }
 
-func Server(port int) *Stream {
-	if e := enigma.New(); e != nil {
-		s := &Stream{role: vtc.Server, ServerPort: port, enigma: e}
-		if s.initKeys() {
-			return s
-		}
-	}
-	return nil
+func Server(port int, e *enigma.Enigma) *Stream {
+	return &Stream{role: vtc.Server, ServerPort: port, enigma: e}
 }
 
-func (s *Stream) initKeys() bool {
+func (s *Stream) InitKeys() bool {
 	if key := secret.RandomBytes(blowfish.MaxKeyLength); s.enigma.InitBlowfish(key) {
 		if key := secret.RandomBytes(ghost.KeySize); s.enigma.InitGhost(key) {
 			if key := secret.RandomBytes(way3.KeySize); s.enigma.InitWay3(key) {
@@ -79,11 +73,8 @@ func (s *Stream) initKeys() bool {
 	return false
 }
 
-func Client(addr string, port, timeout int) *Stream {
-	if e := enigma.New(); e != nil {
-		return &Stream{role: vtc.Client, ServerAddr: addr, ServerPort: port, enigma: e, timeout: timeout}
-	}
-	return nil
+func Client(addr string, port int, e *enigma.Enigma, timeout int) *Stream {
+	return &Stream{role: vtc.Client, ServerAddr: addr, ServerPort: port, enigma: e, timeout: timeout}
 }
 
 /********************************************************************
@@ -161,12 +152,10 @@ func (s *Stream) waitForClient(retChan chan<- vtc.OperationStatusType) {
 				if conn, err := listener.AcceptTCP(); tr.IsOK(err) {
 					if err := conn.SetKeepAlive(true); tr.IsOK(err) {
 						if iface := tcpiface.New(conn); iface != nil {
-							if s.enigma.InitConnection(iface, vtc.Server) {
-								s.Requester = requester.New(iface, s.enigma)
-								s.Responder = responder.New(iface, s.enigma)
-								retChan <- vtc.Ok
-								return
-							}
+							s.Requester = requester.New(iface, s.enigma)
+							s.Responder = responder.New(iface, s.enigma)
+							retChan <- vtc.Ok
+							return
 						}
 					}
 				}
@@ -224,15 +213,15 @@ func (s *Stream) connectToServer(ctx context.Context, wg *sync.WaitGroup, retCha
 	}
 }
 
+// Client
+// Próba połączenia z serwerem.
 func (s *Stream) dial(tcpAddr net.TCPAddr) bool {
 	if conn, err := net.DialTCP("tcp", nil, &tcpAddr); tr.IsOK(err) {
 		if err := conn.SetKeepAlive(true); tr.IsOK(err) {
 			if iface := tcpiface.New(conn); tr.IsOK(err) {
-				if s.enigma.InitConnection(iface, vtc.Client) {
-					s.Requester = requester.New(iface, s.enigma)
-					s.Responder = responder.New(iface, s.enigma)
-					return true
-				}
+				s.Requester = requester.New(iface, s.enigma)
+				s.Responder = responder.New(iface, s.enigma)
+				return true
 			}
 		}
 	}

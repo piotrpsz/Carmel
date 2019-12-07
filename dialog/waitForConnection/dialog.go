@@ -210,6 +210,7 @@ func (d *Dialog) createContent() *gtk.Grid {
 	return nil
 }
 
+// Sprawdzenie poprawności danych w polu 'port'.
 func (d *Dialog) validData() bool {
 	if text, err := d.portEntry.GetText(); !tr.IsOK(err) || !shared.OnlyDigits(text) {
 		d.portEntry.GrabFocus()
@@ -251,7 +252,7 @@ func (d *Dialog) start() {
 
 				if state == vtc.Ok {
 					// TODO: create/display chat window
-					fmt.Println("OK")
+					fmt.Println("Connection establishe")
 					return
 				}
 			}

@@ -48,17 +48,17 @@ import (
 )
 
 type Enigma struct {
-	ServerId      []byte             // 128 bytes identifying the server
-	ClientId      []byte             // 128 bytes identifying the client
-	PrivateKey    *rsa.PrivateKey    // my private RSA key
-	MatePublicKey *rsa.PublicKey     // client's RSA public key
-	bf            *blowfish.Blowfish // blowfish
-	gt            *ghost.Gost        // ghost
-	w3            *way3.Way3         // 3-way
-	Keys          vtc.Keys
+	ServerId       []byte             // 128 bytes identifying the server
+	ClientId       []byte             // 128 bytes identifying the client
+	privateKey     *rsa.PrivateKey    // my private RSA key
+	buddyPublicKey *rsa.PublicKey     // client's RSA public key
+	bf             *blowfish.Blowfish // blowfish
+	gt             *ghost.Gost        // ghost
+	w3             *way3.Way3         // 3-way
+	Keys           vtc.Keys
 }
 
-func New() *Enigma {
+func New(buddyName string) *Enigma {
 	// Determining server and client identifiers
 	// The keys depend on the day and the month number
 	// (they are different every day of the year).
@@ -68,15 +68,36 @@ func New() *Enigma {
 	idx0 *= 2
 	idx1 := idx0 + 128
 	idx1 += 32
+
 	serverId := vtc.RandomBytes[idx0 : idx0+128]
 	clientId := vtc.RandomBytes[idx1 : idx1+128]
 
 	if rsaManager := rsakeys.New(); rsaManager != nil {
 		if privateKey := rsaManager.PrivateKeyFromFileForUser(shared.MyUserName); privateKey != nil {
-			return &Enigma{ServerId: serverId, ClientId: clientId, PrivateKey: privateKey}
+			e := &Enigma{ServerId: serverId, ClientId: clientId, privateKey: privateKey}
+			if buddyName != "" {
+				if !e.SetBuddyRSAPublicKey(buddyName) {
+					return nil
+				}
+			}
+			return e
 		}
 	}
 	return nil
+}
+
+// Ta funkcja w serwerze wywoływana jest dopiero po połączeniu.
+// Nazwę partnera rozmowy otrzyma przy pierwszej wymianie danych.
+// Klient wywołuje tę funkcję przy tworzeniu obiektu 'enigma'.
+// Klient z góry musi wiedzieć z kim się łączy.
+func (e *Enigma) SetBuddyRSAPublicKey(buddyName string) bool {
+	if rsaManager := rsakeys.New(); rsaManager != nil {
+		if buddyPublicKey := rsaManager.PublicKeyFromFileForUser(buddyName); buddyPublicKey != nil {
+			e.buddyPublicKey = buddyPublicKey
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Enigma) InitBlowfish(key []byte) bool {
@@ -111,8 +132,8 @@ func (e *Enigma) InitWay3(key []byte) bool {
 // Each data encryption is done with the partner's public RSA key
 // The partner decrypts the data with his private RSA key
 func (e *Enigma) EncryptRSA(plain []byte) []byte {
-	if e.MatePublicKey != nil {
-		if cipher, err := rsa.EncryptPKCS1v15(rand.Reader, e.MatePublicKey, plain); tr.IsOK(err) {
+	if e.buddyPublicKey != nil {
+		if cipher, err := rsa.EncryptPKCS1v15(rand.Reader, e.buddyPublicKey, plain); tr.IsOK(err) {
 			return cipher
 		}
 	}
@@ -122,8 +143,8 @@ func (e *Enigma) EncryptRSA(plain []byte) []byte {
 // Deciphering the text with my private RSA key
 // The data that the partner has encrypted with my public RSA key.
 func (e *Enigma) DecryptRsa(cipher []byte) []byte {
-	if e.PrivateKey != nil {
-		if plain, err := rsa.DecryptPKCS1v15(rand.Reader, e.PrivateKey, cipher); tr.IsOK(err) {
+	if e.privateKey != nil {
+		if plain, err := rsa.DecryptPKCS1v15(rand.Reader, e.privateKey, cipher); tr.IsOK(err) {
 			return plain
 		}
 	}
@@ -133,7 +154,7 @@ func (e *Enigma) DecryptRsa(cipher []byte) []byte {
 // Calculates the signature for the given data
 func (e *Enigma) Signature(data []byte) []byte {
 	hash := sha512.Sum512(data)
-	if sign, err := rsa.SignPKCS1v15(rand.Reader, e.PrivateKey, crypto.SHA512, hash[:]); tr.IsOK(err) {
+	if sign, err := rsa.SignPKCS1v15(rand.Reader, e.privateKey, crypto.SHA512, hash[:]); tr.IsOK(err) {
 		return sign
 	}
 	return nil
@@ -142,7 +163,7 @@ func (e *Enigma) Signature(data []byte) []byte {
 // Checking the correctness of the signature for the given data
 func (e *Enigma) IsValidSignature(sign, data []byte) bool {
 	hash := sha512.Sum512(data)
-	if err := rsa.VerifyPKCS1v15(e.MatePublicKey, crypto.SHA512, hash[:], sign); tr.IsOK(err) {
+	if err := rsa.VerifyPKCS1v15(e.buddyPublicKey, crypto.SHA512, hash[:], sign); tr.IsOK(err) {
 		return true
 	}
 	return false
@@ -189,27 +210,9 @@ func (e *Enigma) Decrypt(cipher []byte) []byte {
 func (e *Enigma) InitConnection(iface *tcpiface.TCPInterface, role vtc.RoleType) bool {
 	switch role {
 	case vtc.Server:
-		return e.initConnectionAsServer(iface)
+		return e.exchangeIdentifierBlockAsServer(iface)
 	case vtc.Client:
-		return e.initConnectionAsClient(iface)
-	}
-	return false
-}
-
-func (e *Enigma) initConnectionAsServer(iface *tcpiface.TCPInterface) bool {
-	if e.exchangeIdentifierBlockAsServer(iface) {
-		if e.sendKeys(iface) {
-			return true
-		}
-	}
-	return false
-}
-
-func (e *Enigma) initConnectionAsClient(iface *tcpiface.TCPInterface) bool {
-	if e.exchangeIdentifierBlockAsClient(iface) {
-		if e.readKeys(iface) {
-			return true
-		}
+		return e.exchangeIdentifierBlockAsClient(iface)
 	}
 	return false
 }

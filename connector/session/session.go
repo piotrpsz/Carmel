@@ -30,6 +30,7 @@ package session
 
 import (
 	"Carmel/connector/stream"
+	"Carmel/secret/enigma"
 )
 
 type Session struct {
@@ -38,9 +39,15 @@ type Session struct {
 }
 
 func ServerNew(port int) *Session {
-	return &Session{In: stream.Server(port), Out: stream.Server(port + 1)}
+	if e := enigma.New(""); e != nil {
+		return &Session{In: stream.Server(port, e), Out: stream.Server(port+1, e)}
+	}
+	return nil
 }
 
-func ClientNew(addr string, port, timeout int) *Session {
-	return &Session{In: stream.Client(addr, port, timeout), Out: stream.Client(addr, port+1, timeout)}
+func ClientNew(addr string, port int, buddyName string, timeout int) *Session {
+	if e := enigma.New(buddyName); e != nil {
+		return &Session{In: stream.Client(addr, port, e, timeout), Out: stream.Client(addr, port+1, e, timeout)}
+	}
+	return nil
 }

@@ -35,12 +35,9 @@ import (
 	"Carmel/rsakeys"
 	"Carmel/shared"
 	"Carmel/shared/tr"
-	"encoding/json"
 	"fmt"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"unicode"
 )
@@ -377,19 +374,25 @@ func (mw *MainWindow) canRecreateKeys(userName string) bool {
 ********************************************************************/
 
 func (mw *MainWindow) updateIP() {
-	if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
-		defer response.Body.Close()
-		if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
-			data := make(map[string]interface{})
-			if err := json.Unmarshal(content, &data); tr.IsOK(err) {
-				if text, ok := data["ip"].(string); ok {
-					shared.MyIPAddr = text
-					markup := fmt.Sprintf(ipFormat, text)
-					glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
+	shared.MyIPAddr = "192.168.1.117"
+	markup := fmt.Sprintf(ipFormat, shared.MyIPAddr)
+	glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
+
+	/*
+		if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
+			defer response.Body.Close()
+			if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
+				data := make(map[string]interface{})
+				if err := json.Unmarshal(content, &data); tr.IsOK(err) {
+					if text, ok := data["ip"].(string); ok {
+						shared.MyIPAddr = text
+						markup := fmt.Sprintf(ipFormat, text)
+						glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
+					}
 				}
 			}
 		}
-	}
+	*/
 }
 
 func (mw *MainWindow) updateUser() {
