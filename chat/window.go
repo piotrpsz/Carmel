@@ -30,6 +30,7 @@ package chat
 
 import (
 	"Carmel/chat/message"
+	"Carmel/connector/session"
 	"Carmel/shared/tr"
 	"context"
 	"fmt"
@@ -37,6 +38,7 @@ import (
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 	"github.com/gotk3/gotk3/pango"
+	"strings"
 	"sync"
 )
 
@@ -45,6 +47,7 @@ const (
 	MyMessageTag    = "my_message"
 	OtherNameTag    = "other_name"
 	OtherMessageTag = "other_message"
+	subtitleFormat  = "IP: %s"
 )
 
 var (
@@ -74,6 +77,8 @@ var (
 type Window struct {
 	app           *gtk.Application
 	win           *gtk.ApplicationWindow
+	buddyName     string
+	ssn           *session.Session
 	browser       *gtk.TextView
 	browserBuffer *gtk.TextBuffer
 	entry         *gtk.TextView
@@ -92,24 +97,51 @@ type Window struct {
 	browserIn chan message.ChatMessage
 }
 
-func New(app *gtk.Application) *Window {
-	if win, err := gtk.ApplicationWindowNew(app); tr.IsOK(err) {
-		w := &Window{app: app, win: win}
-		if headerBar := w.createHeaderBar(); headerBar != nil {
-			if menuButton := w.createMenu(); menuButton != nil {
-				headerBar.PackEnd(menuButton)
-				if content := w.createContent(); content != nil {
-					win.Add(content)
-					win.SetTitlebar(headerBar)
-					win.SetDefaultSize(400, 400)
+func New(app *gtk.Application, buddyName string, ssn *session.Session) *Window {
+	if !ssn.In.Enigma.SetBuddyRSAPublicKey(buddyName) {
+		unknownRSAKey(app, buddyName)
+		return nil
+	}
 
-					w.ctx, w.cancel = context.WithCancel(context.Background())
-					return w
+	if canConnectWith(app, buddyName) {
+		if win, err := gtk.ApplicationWindowNew(app); tr.IsOK(err) {
+			w := &Window{app: app, win: win, buddyName: buddyName, ssn: ssn}
+			if headerBar := w.createHeaderBar(); headerBar != nil {
+				if menuButton := w.createMenu(); menuButton != nil {
+					headerBar.PackEnd(menuButton)
+					if content := w.createContent(); content != nil {
+						win.Add(content)
+						win.SetTitlebar(headerBar)
+						win.SetDefaultSize(400, 400)
+
+						w.ctx, w.cancel = context.WithCancel(context.Background())
+						return w
+					}
 				}
 			}
 		}
 	}
+
 	return nil
+}
+
+func canConnectWith(app *gtk.Application, buddyName string) bool {
+	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO, ""); dialog != nil {
+		defer dialog.Destroy()
+		dialog.FormatSecondaryText(fmt.Sprintf("Would you like to chat with %s?", buddyName))
+		if dialog.Run() == gtk.RESPONSE_YES {
+			return true
+		}
+	}
+	return false
+}
+
+func unknownRSAKey(app *gtk.Application, buddyName string) {
+	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE, ""); dialog != nil {
+		defer dialog.Destroy()
+		dialog.FormatSecondaryText(fmt.Sprintf("RSA public keyfor %s not found", buddyName))
+		dialog.Run()
+	}
 }
 
 func (w *Window) ShowAll() {
@@ -131,8 +163,9 @@ func (w *Window) Close() {
 func (w *Window) createHeaderBar() *gtk.HeaderBar {
 	if bar, err := gtk.HeaderBarNew(); tr.IsOK(err) {
 		bar.SetShowCloseButton(false)
-		bar.SetTitle("Chat with John")
-		bar.SetSubtitle("IP 124.35.3.11")
+		bar.SetTitle(w.buddyName)
+		address := strings.Split(w.ssn.In.RemoteAddr, ":")
+		bar.SetSubtitle(fmt.Sprintf(subtitleFormat, address[0]))
 		return bar
 	}
 	return nil

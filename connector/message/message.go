@@ -40,14 +40,15 @@ import (
 )
 
 type Message struct {
-	Type    vtc.MessageType         `json:"type"`    // Request | Answer
-	Id      uint32                  `json:"id"`      // message ID (login, logout, ...)
-	Status  vtc.OperationStatusType `json:"status"`  // operation status, used only in answer
-	Data    []byte                  `json:"data"`    // data sent in the message
-	Extra   []byte                  `json:"extra"`   // additional data sent in the message
-	Counter uint32                  `json:"counter"` // message counter (security check)
-	Marker  float32                 `json:"marker"`  // marker (security check)
-	Tstamp  time.Time               `json:"tstamp"`  // time stamp (security check)
+	Type    vtc.MessageType         `json:"type"`            // Request | Answer
+	Id      uint32                  `json:"id"`              // message ID (login, logout, ...)
+	Status  vtc.OperationStatusType `json:"status"`          // operation status, used only in answer
+	Data    []byte                  `json:"data"`            // data sent in the message
+	Extra   []byte                  `json:"extra,omitempty"` // additional data sent in the message
+	Blob    []byte                  `json:"blob,omitempty"`  // string of bytes with context dependent meaning
+	Counter uint32                  `json:"counter"`         // message counter (security check)
+	Marker  float32                 `json:"marker"`          // marker (security check)
+	Tstamp  time.Time               `json:"tstamp"`          // time stamp (security check)
 }
 
 func NewWithType(msgType vtc.MessageType) *Message {

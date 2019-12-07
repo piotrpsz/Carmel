@@ -50,22 +50,23 @@ import (
 
 type Stream struct {
 	role       vtc.RoleType
-	enigma     *enigma.Enigma
+	Enigma     *enigma.Enigma
 	Responder  *responder.Responder
 	Requester  *requester.Requester
+	RemoteAddr string
 	ServerAddr string // client only
 	ServerPort int    // server & client
 	timeout    int    // client only
 }
 
 func Server(port int, e *enigma.Enigma) *Stream {
-	return &Stream{role: vtc.Server, ServerPort: port, enigma: e}
+	return &Stream{role: vtc.Server, ServerPort: port, Enigma: e}
 }
 
 func (s *Stream) InitKeys() bool {
-	if key := secret.RandomBytes(blowfish.MaxKeyLength); s.enigma.InitBlowfish(key) {
-		if key := secret.RandomBytes(ghost.KeySize); s.enigma.InitGhost(key) {
-			if key := secret.RandomBytes(way3.KeySize); s.enigma.InitWay3(key) {
+	if key := secret.RandomBytes(blowfish.MaxKeyLength); s.Enigma.InitBlowfish(key) {
+		if key := secret.RandomBytes(ghost.KeySize); s.Enigma.InitGhost(key) {
+			if key := secret.RandomBytes(way3.KeySize); s.Enigma.InitWay3(key) {
 				return true
 			}
 		}
@@ -74,7 +75,16 @@ func (s *Stream) InitKeys() bool {
 }
 
 func Client(addr string, port int, e *enigma.Enigma, timeout int) *Stream {
-	return &Stream{role: vtc.Client, ServerAddr: addr, ServerPort: port, enigma: e, timeout: timeout}
+	return &Stream{role: vtc.Client, ServerAddr: addr, ServerPort: port, Enigma: e, timeout: timeout}
+}
+
+func (s *Stream) Close() {
+	defer func() {
+		s.Responder = nil
+		s.Requester = nil
+	}()
+	s.Responder.Close()
+	s.Requester.Close()
 }
 
 /********************************************************************
@@ -152,8 +162,9 @@ func (s *Stream) waitForClient(retChan chan<- vtc.OperationStatusType) {
 				if conn, err := listener.AcceptTCP(); tr.IsOK(err) {
 					if err := conn.SetKeepAlive(true); tr.IsOK(err) {
 						if iface := tcpiface.New(conn); iface != nil {
-							s.Requester = requester.New(iface, s.enigma)
-							s.Responder = responder.New(iface, s.enigma)
+							s.RemoteAddr = conn.RemoteAddr().String()
+							s.Requester = requester.New(iface, s.Enigma)
+							s.Responder = responder.New(iface, s.Enigma)
 							retChan <- vtc.Ok
 							return
 						}
@@ -219,8 +230,9 @@ func (s *Stream) dial(tcpAddr net.TCPAddr) bool {
 	if conn, err := net.DialTCP("tcp", nil, &tcpAddr); tr.IsOK(err) {
 		if err := conn.SetKeepAlive(true); tr.IsOK(err) {
 			if iface := tcpiface.New(conn); tr.IsOK(err) {
-				s.Requester = requester.New(iface, s.enigma)
-				s.Responder = responder.New(iface, s.enigma)
+				s.RemoteAddr = conn.RemoteAddr().String()
+				s.Requester = requester.New(iface, s.Enigma)
+				s.Responder = responder.New(iface, s.Enigma)
 				return true
 			}
 		}

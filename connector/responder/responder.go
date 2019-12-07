@@ -48,6 +48,13 @@ func New(iface *tcpiface.TCPInterface, e *enigma.Enigma) *Responder {
 	return &Responder{iface: iface, secret: e}
 }
 
+func (r *Responder) Close() {
+	defer func() {
+		r.iface = nil
+	}()
+	r.iface.Close()
+}
+
 func (r *Responder) IsValid(request, answer *message.Message, tstamp time.Time) bool {
 	switch {
 	case answer.Type != vtc.Answer:

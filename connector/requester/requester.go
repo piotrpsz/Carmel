@@ -56,6 +56,13 @@ func New(iface *tcpiface.TCPInterface, e *enigma.Enigma) *Requester {
 	return &Requester{iface: iface, secret: e}
 }
 
+func (r *Requester) Close() {
+	defer func() {
+		r.iface = nil
+	}()
+	r.iface.Close()
+}
+
 func (r *Requester) IsValid(msg *message.Message, tstamp time.Time) bool {
 	if msg.Type != vtc.Request {
 		tr.IsOK(errors.New("message is not a request"))
@@ -66,6 +73,17 @@ func (r *Requester) IsValid(msg *message.Message, tstamp time.Time) bool {
 		return false
 	}
 	return true
+}
+
+func (r *Requester) SendRawMessage(data []byte) bool {
+	if datagram.Send(r.iface, data) {
+		return true
+	}
+	return false
+}
+
+func (r *Requester) ReadRawMessage() []byte {
+	return datagram.Read(r.iface)
 }
 
 // Client side - sending a request to the server.

@@ -29,6 +29,8 @@
 package connectTo
 
 import (
+	"Carmel/chat"
+	"Carmel/connector/message"
 	"Carmel/connector/session"
 	"Carmel/shared"
 	"Carmel/shared/tr"
@@ -38,6 +40,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +74,7 @@ const (
 
 type Dialog struct {
 	self              *gtk.Dialog
+	app               *gtk.Application
 	spinner           *gtk.Spinner
 	ipEntry           *gtk.Entry
 	portEntry         *gtk.Entry
@@ -90,7 +94,7 @@ func New(app *gtk.Application) *Dialog {
 		dialog.SetTransientFor(app.GetActiveWindow())
 		dialog.SetTitle(dialogTitle)
 
-		instance := &Dialog{self: dialog}
+		instance := &Dialog{self: dialog, app: app}
 		if contentGrid := instance.createContent(); contentGrid != nil {
 			if buttonsBox := instance.createButtons(); buttonsBox != nil {
 				if descriptionLabel, err := gtk.LabelNew(""); tr.IsOK(err) {
@@ -282,7 +286,7 @@ func (d *Dialog) start() {
 		ip, _ := d.ipEntry.GetText()
 		port, _ := d.portEntry.GetText()
 		name, _ := d.nameEntry.GetText()
-		//pin,_  := d.pinEntry.GetText()
+		pin, _ := d.pinEntry.GetText()
 		portn, _ := strconv.Atoi(port)
 
 		if ssn := session.ClientNew(ip, portn, name, shared.ConnectionTimeout); ssn != nil {
@@ -303,13 +307,17 @@ func (d *Dialog) start() {
 					wg.Wait()
 
 					if state == vtc.Ok {
-						fmt.Println("Connection established")
+						log.Println("connection established")
+						if d.initConnection(ssn, name, pin) {
+							log.Println("connection initialized")
+							glib.IdleAdd(func() {
+								d.self.Destroy()
+								chat.New(d.app, name, ssn).ShowAll()
+							})
+							return
+						}
 
 						// Wysłanie dnaych logowania
-
-						// TODO: create/diaplay chat window
-
-						return
 					}
 				}
 
@@ -339,6 +347,35 @@ func (d *Dialog) start() {
 		}
 		d.stop()
 	}
+}
+
+// Klient wysyła dane do logowania.
+// Server to zaakceptuje lub nie :)
+// Brak akceptacji najprawdopodobniej oznacza, że po stronie
+// serwera brakuje twojego publicznego klucza RSA.
+func (d *Dialog) initConnection(ssn *session.Session, name, pin string) bool {
+	// Wysłanie dnaych logowania
+	msg := message.NewWithType(vtc.Request)
+	msg.Id = vtc.Login
+	msg.Data = []byte(fmt.Sprintf("%s|%s", shared.MyUserName, name)) // my_name | yours_name
+	msg.Extra = []byte(pin)
+	msg.Tstamp = shared.Now()
+
+	if data := msg.ToJsonSnapped(); data != nil {
+		if cipher := ssn.Out.Enigma.EncryptRSA(data); cipher != nil {
+			if ssn.Out.Requester.SendRawMessage(cipher) {
+				if data := ssn.Out.Requester.ReadRawMessage(); data != nil {
+					if plain := ssn.Out.Enigma.DecryptRsa(data); plain != nil {
+						if msg := message.NewFromJson(plain); msg != nil {
+							fmt.Println(msg)
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 func (d *Dialog) continueEdition() {

@@ -41,6 +41,11 @@ const (
 )
 
 const (
+	_ uint32 = iota
+	Login
+)
+
+const (
 	_ RoleType = iota
 	Server
 	Client
@@ -52,6 +57,7 @@ const (
 	Timeout
 	Error
 	Cancel
+	SecurityBreach
 )
 
 const (

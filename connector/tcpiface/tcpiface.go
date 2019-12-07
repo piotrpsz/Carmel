@@ -31,6 +31,7 @@ package tcpiface
 import (
 	"Carmel/shared/tr"
 	"bufio"
+	"fmt"
 	"net"
 )
 
@@ -48,6 +49,17 @@ func New(conn *net.TCPConn) *TCPInterface {
 	return nil
 }
 
+func (iface *TCPInterface) Close() {
+	defer func() {
+		iface.writer = nil
+		iface.reader = nil
+	}()
+
+	if iface.writer != nil {
+		iface.writer.Close()
+	}
+}
+
 func (iface *TCPInterface) Write(data []byte) bool {
 	if _, err := iface.writer.Write(data); tr.IsOK(err) {
 		return true
@@ -61,4 +73,8 @@ func (iface *TCPInterface) Read(bytesNumber int) []byte {
 		return buffer
 	}
 	return nil
+}
+
+func (iface *TCPInterface) Address() string {
+	return fmt.Sprintf("local: %s -- remote: %s", iface.writer.LocalAddr(), iface.writer.RemoteAddr())
 }

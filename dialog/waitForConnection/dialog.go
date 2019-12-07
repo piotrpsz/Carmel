@@ -29,6 +29,8 @@
 package waitForConnection
 
 import (
+	"Carmel/chat"
+	"Carmel/connector/message"
 	"Carmel/connector/session"
 	"Carmel/secret"
 	"Carmel/shared"
@@ -40,7 +42,9 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -67,11 +71,13 @@ const (
 
 	connectionCanceled  = "Canceled"
 	connectionError     = "Unknown error"
+	connectionSecurity  = "Security breach"
 	connectionMsgFormat = "Connection failed on port:  %d"
 )
 
 type Dialog struct {
 	self              *gtk.Dialog
+	app               *gtk.Application
 	ipLabel           *gtk.Label
 	portEntry         *gtk.Entry
 	nameLabel         *gtk.Label
@@ -91,7 +97,8 @@ func New(app *gtk.Application) *Dialog {
 		dialog.SetTransientFor(app.GetActiveWindow())
 		dialog.SetTitle(dialogTitle)
 
-		instance := &Dialog{self: dialog}
+		instance := &Dialog{self: dialog, app: app}
+
 		if contentGrid := instance.createContent(); contentGrid != nil {
 			if buttonsBox := instance.createButtons(); buttonsBox != nil {
 				if descriptionLabel, err := gtk.LabelNew(""); tr.IsOK(err) {
@@ -211,68 +218,96 @@ func (d *Dialog) createContent() *gtk.Grid {
 }
 
 // Sprawdzenie poprawności danych w polu 'port'.
-func (d *Dialog) validData() bool {
-	if text, err := d.portEntry.GetText(); !tr.IsOK(err) || !shared.OnlyDigits(text) {
-		d.portEntry.GrabFocus()
-		return false
+func (d *Dialog) validData() (bool, int, string) {
+	if portAsString, err := d.portEntry.GetText(); tr.IsOK(err) && shared.OnlyDigits(portAsString) {
+		if port, err := strconv.Atoi(portAsString); tr.IsOK(err) {
+			if pin, err := d.pinLabel.GetText(); tr.IsOK(err) && shared.OnlyHexDigits(pin) {
+				return true, port, pin
+			}
+		}
 	}
-	return true
+
+	return false, 0, ""
 }
 
 // Serwer rozpoczyna nasłuchiwanie nadchodzących połączeń od klienta.
 func (d *Dialog) start() {
-	if !d.validData() {
+	ok, port, pin := d.validData()
+	if !ok {
 		return
 	}
 	d.connectionAttempt = true
 	d.spinner.Start()
 	d.enableDisable(false)
 
-	port, _ := d.portEntry.GetText()
-	portn, _ := strconv.Atoi(port)
-
-	if ssn := session.ServerNew(portn); ssn != nil {
+	if ssn := session.ServerNew(port); ssn != nil {
 		d.ctx, d.cancel = context.WithCancel(context.Background())
 		go func() {
-			var (
-				failureReason string
-				wg            sync.WaitGroup
-			)
+			var failureReason string
+			var faildePort int
+			var wg sync.WaitGroup
+			var stateIn, stateOut vtc.OperationStatusType
+			state := vtc.Ok
 
-			currentPort := ssn.In.ServerPort
-			wg.Add(1)
-			state := ssn.In.Run(d.ctx, &wg)
+			wg.Add(2)
+			go func() {
+				stateIn = ssn.In.Run(d.ctx, &wg)
+			}()
+			go func() {
+				stateOut = ssn.Out.Run(d.ctx, &wg)
+			}()
 			wg.Wait()
 
-			if state == vtc.Ok {
-				currentPort = ssn.Out.ServerPort
-				wg.Add(1)
-				state = ssn.Out.Run(d.ctx, &wg)
-				wg.Wait()
-
-				if state == vtc.Ok {
-					// TODO: create/display chat window
-					fmt.Println("Connection establishe")
+			if stateIn == vtc.Ok && stateOut == vtc.Ok {
+				fmt.Println("Connection establishe")
+				if buddyName := d.initConnection(ssn, pin); buddyName != "" {
+					fmt.Println("Connection initialized")
+					glib.IdleAdd(func() {
+						d.self.Destroy()
+						if chatter := chat.New(d.app, buddyName, ssn); chatter != nil {
+							chatter.ShowAll()
+						}
+					})
 					return
+				}
+				state = vtc.SecurityBreach
+				ssn.Close()
+				ssn = nil
+			}
+
+			if state == vtc.Ok {
+				if stateIn != vtc.Ok {
+					faildePort = ssn.In.ServerPort
+					state = stateIn
+				} else {
+					faildePort = ssn.Out.ServerPort
+					state = stateOut
 				}
 			}
 
 			switch state {
 			case vtc.Cancel:
 				failureReason = connectionCanceled
+			case vtc.SecurityBreach:
+				failureReason = connectionSecurity
 			default:
 				failureReason = connectionError
 			}
 
 			glib.IdleAdd(func() {
 				d.spinner.Stop()
-				if errDialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CANCEL, failureReason); errDialog != nil {
+				if errDialog := gtk.MessageDialogNew(d.self, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, failureReason); errDialog != nil {
 					defer func() {
 						errDialog.Destroy()
 						d.continueEdition()
 					}()
-					errDialog.FormatSecondaryText(fmt.Sprintf(connectionMsgFormat, currentPort))
+					if state != vtc.SecurityBreach {
+						errDialog.FormatSecondaryText(fmt.Sprintf(connectionMsgFormat, faildePort))
+					}
 					errDialog.Run()
+					if state == vtc.SecurityBreach {
+						os.Exit(1)
+					}
 				}
 			})
 		}()
@@ -280,6 +315,25 @@ func (d *Dialog) start() {
 	}
 
 	d.stop()
+}
+
+// Odczyt od klienta żądania inicjacyjnego.
+// Operacja przesyłu danych szyfrowana jest w całości kluczem RSA.
+func (d *Dialog) initConnection(ssn *session.Session, pin string) string {
+	if data := ssn.In.Requester.ReadRawMessage(); data != nil {
+		if plain := ssn.In.Enigma.DecryptRsa(data); plain != nil {
+			if msg := message.NewFromJson(plain); msg != nil {
+				if msg.Id == vtc.Login {
+					if items := strings.Split(string(msg.Data), "|"); len(items) == 2 {
+						if items[1] == shared.MyUserName && pin == string(msg.Extra) {
+							return items[0]
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (d *Dialog) continueEdition() {
@@ -360,7 +414,7 @@ func createPortWidgets() (*gtk.Label, *gtk.Entry) {
 		if portEntry, err := gtk.EntryNew(); tr.IsOK(err) {
 			portPrompt.SetHAlign(gtk.ALIGN_END)
 			portPrompt.SetMarkup(fmt.Sprintf(promptFormat, "Port"))
-			portEntry.SetText("30303")
+			portEntry.SetText("12345")
 			return portPrompt, portEntry
 		}
 	}
