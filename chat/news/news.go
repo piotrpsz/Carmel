@@ -26,24 +26,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package message
+package news
 
 import "strings"
 
-type ChatMessage struct {
+type News struct {
 	Name string
 	Text string
 	Own  bool
 }
 
-func New(name, text string, own bool) ChatMessage {
-	return ChatMessage{
+func New(name, text string, own bool) News {
+	return News{
 		Name: strings.TrimSpace(name),
 		Text: strings.TrimSpace(text),
 		Own:  own,
 	}
 }
 
-func (m ChatMessage) Valid() bool {
+func (m News) Valid() bool {
 	return len(m.Text) > 0
 }

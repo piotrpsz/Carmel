@@ -29,8 +29,6 @@
 package enigma
 
 import (
-	"Carmel/connector/datagram"
-	"Carmel/connector/tcpiface"
 	"Carmel/rsakeys"
 	"Carmel/secret"
 	"Carmel/secret/enigma/blowfish"
@@ -43,8 +41,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
-	"encoding/json"
-	"log"
 )
 
 type Enigma struct {
@@ -207,90 +203,7 @@ func (e *Enigma) Decrypt(cipher []byte) []byte {
 *                                                                   *
 ********************************************************************/
 
-func (e *Enigma) InitConnection(iface *tcpiface.TCPInterface, role vtc.RoleType) bool {
-	switch role {
-	case vtc.Server:
-		return e.exchangeIdentifierBlockAsServer(iface)
-	case vtc.Client:
-		return e.exchangeIdentifierBlockAsClient(iface)
-	}
-	return false
-}
-
-func (e *Enigma) exchangeIdentifierBlockAsServer(iface *tcpiface.TCPInterface) bool {
-	// Serwer jako pierwszy wysyła swój blok identyfikacyjny
-	if cipher := e.EncryptRSA(e.ServerId); cipher != nil {
-		if !datagram.Send(iface, cipher) {
-			return false
-		}
-	}
-	// Serwer odczytuje blok identyfikacyjny klienta
-	// i sprawdza jego poprawność.
-	if cipher := datagram.Read(iface); cipher != nil {
-		if data := e.DecryptRsa(cipher); data != nil {
-			if !secret.AreSlicesEqual(data, e.ClientId) {
-				log.Println("invalid client identifier")
-				return false
-			}
-
-		}
-	}
-	return true
-}
-
-func (e *Enigma) exchangeIdentifierBlockAsClient(iface *tcpiface.TCPInterface) bool {
-	// Klient odczytuje blok identyfikacyjny serwera
-	// i sprawdza jego poprawność.
-	if cipher := datagram.Read(iface); cipher != nil {
-		if data := e.DecryptRsa(cipher); data != nil {
-			if !secret.AreSlicesEqual(data, e.ServerId) {
-				log.Println("invalid server identifier")
-				return false
-			}
-		}
-	}
-	// Klient wysyła swój blok identyfikacyjny
-	if cipher := e.EncryptRSA(e.ClientId); cipher != nil {
-		if !datagram.Send(iface, cipher) {
-			return false
-		}
-	}
-	return true
-}
-
-func (e *Enigma) sendKeys(iface *tcpiface.TCPInterface) bool {
-	defer e.clearKeys()
-
-	if data, err := json.Marshal(e.Keys); tr.IsOK(err) {
-		if cipher := e.EncryptRSA(data); cipher != nil {
-			if datagram.Send(iface, cipher) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (e *Enigma) readKeys(iface *tcpiface.TCPInterface) bool {
-	defer e.clearKeys()
-
-	if cipher := datagram.Read(iface); cipher != nil {
-		if data := e.DecryptRsa(cipher); data != nil {
-			if err := json.Unmarshal(data, &e.Keys); tr.IsOK(err) {
-				if e.InitBlowfish(e.Keys.Blowfish) {
-					if e.InitGhost(e.Keys.Ghost) {
-						if e.InitWay3(e.Keys.Way3) {
-							return true
-						}
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-func (e *Enigma) clearKeys() {
+func (e *Enigma) ClearKeys() {
 	secret.ClearSlice(&e.Keys.Blowfish)
 	secret.ClearSlice(&e.Keys.Ghost)
 	secret.ClearSlice(&e.Keys.Way3)

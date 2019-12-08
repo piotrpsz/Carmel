@@ -259,12 +259,10 @@ func (d *Dialog) start() {
 			wg.Wait()
 
 			if stateIn == vtc.Ok && stateOut == vtc.Ok {
-				fmt.Println("Connection establishe")
 				if buddyName := d.initConnection(ssn, pin); buddyName != "" {
-					fmt.Println("Connection initialized")
 					glib.IdleAdd(func() {
 						d.self.Destroy()
-						if chatter := chat.New(d.app, buddyName, ssn); chatter != nil {
+						if chatter := chat.New(d.app, vtc.Server, buddyName, ssn); chatter != nil {
 							chatter.ShowAll()
 						}
 					})

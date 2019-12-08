@@ -29,9 +29,12 @@
 package chat
 
 import (
-	"Carmel/chat/message"
+	"Carmel/chat/news"
+	"Carmel/connector/message"
 	"Carmel/connector/session"
+	"Carmel/shared"
 	"Carmel/shared/tr"
+	"Carmel/shared/vtc"
 	"context"
 	"fmt"
 	"github.com/gotk3/gotk3/gdk"
@@ -43,11 +46,13 @@ import (
 )
 
 const (
-	MyNameTag       = "my_name"
-	MyMessageTag    = "my_message"
-	OtherNameTag    = "other_name"
-	OtherMessageTag = "other_message"
-	subtitleFormat  = "IP: %s"
+	MyNameTag            = "my_name"
+	MyMessageTag         = "my_message"
+	OtherNameTag         = "other_name"
+	OtherMessageTag      = "other_message"
+	subtitleFormat       = "IP: %s"
+	canConnectFormat     = "Would you like to chat with %s?"
+	rsaKeyNotFoundFormat = "RSA public key for %s not found"
 )
 
 var (
@@ -94,16 +99,11 @@ type Window struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
-	browserIn chan message.ChatMessage
+	browserIn chan news.News
 }
 
-func New(app *gtk.Application, buddyName string, ssn *session.Session) *Window {
-	if !ssn.In.Enigma.SetBuddyRSAPublicKey(buddyName) {
-		unknownRSAKey(app, buddyName)
-		return nil
-	}
-
-	if canConnectWith(app, buddyName) {
+func New(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session.Session) *Window {
+	if finalInit(app, role, buddyName, ssn) {
 		if win, err := gtk.ApplicationWindowNew(app); tr.IsOK(err) {
 			w := &Window{app: app, win: win, buddyName: buddyName, ssn: ssn}
 			if headerBar := w.createHeaderBar(); headerBar != nil {
@@ -121,14 +121,52 @@ func New(app *gtk.Application, buddyName string, ssn *session.Session) *Window {
 			}
 		}
 	}
-
 	return nil
 }
 
-func canConnectWith(app *gtk.Application, buddyName string) bool {
+func finalInit(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session.Session) bool {
+	// Wszystko do tej pory poszło dobrze, ale może się okazać że
+	// nie mamy publicznego klucza RSA dla wskazanej osoby.
+	// Jeśli tak by było to dupa.
+	if ssn.In.Enigma.SetBuddyRSAPublicKey(buddyName) {
+		// Możemy kontynuuować komunikację, ale czy na pewno chcemy?
+		if dialogCanConnectWith(app, buddyName) {
+			switch role {
+			case vtc.Server:
+				if !sendAcceptance(ssn) {
+					return false
+				}
+				if !ssn.SendKeys() {
+					return false
+				}
+			case vtc.Client:
+				if !ssn.ReadKeys() {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func sendAcceptance(ssn *session.Session) bool {
+	msg := message.NewWithType(vtc.Answer)
+	msg.Id = vtc.Login
+	msg.Status = vtc.Accepted
+	msg.Tstamp = shared.Now()
+	if data := msg.ToJsonSnapped(); data != nil {
+		if cipher := ssn.In.Enigma.EncryptRSA(data); cipher != nil {
+			return ssn.In.Requester.SendRawMessage(cipher)
+		}
+	}
+	return false
+}
+
+func dialogCanConnectWith(app *gtk.Application, buddyName string) bool {
 	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO, ""); dialog != nil {
 		defer dialog.Destroy()
-		dialog.FormatSecondaryText(fmt.Sprintf("Would you like to chat with %s?", buddyName))
+		dialog.FormatSecondaryText(fmt.Sprintf(canConnectFormat, buddyName))
 		if dialog.Run() == gtk.RESPONSE_YES {
 			return true
 		}
@@ -136,16 +174,16 @@ func canConnectWith(app *gtk.Application, buddyName string) bool {
 	return false
 }
 
-func unknownRSAKey(app *gtk.Application, buddyName string) {
+func dialogUnknownRSAKey(app *gtk.Application, buddyName string) {
 	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE, ""); dialog != nil {
 		defer dialog.Destroy()
-		dialog.FormatSecondaryText(fmt.Sprintf("RSA public keyfor %s not found", buddyName))
+		dialog.FormatSecondaryText(fmt.Sprintf(rsaKeyNotFoundFormat, buddyName))
 		dialog.Run()
 	}
 }
 
 func (w *Window) ShowAll() {
-	w.browserIn = make(chan message.ChatMessage)
+	w.browserIn = make(chan news.News)
 	w.wg.Add(1)
 	go w.browserLoop(w.browserIn)
 
@@ -240,7 +278,7 @@ func (w *Window) entryHandler(_, e interface{}) {
 					w.entryBuffer.Delete(w.entryBuffer.GetStartIter(), w.entryBuffer.GetEndIter())
 					w.entryBuffer.PlaceCursor(w.entryBuffer.GetIterAtLine(0))
 
-					if msg := message.New("john", text, true); msg.Valid() {
+					if msg := news.New("john", text, true); msg.Valid() {
 						w.browserIn <- msg
 						// TODO: send message via network to my partner
 					}
@@ -280,7 +318,7 @@ func (w *Window) createBrowser() *gtk.ScrolledWindow {
 	return nil
 }
 
-func (w *Window) appendTextToBrowser(msg message.ChatMessage) {
+func (w *Window) appendTextToBrowser(msg news.News) {
 	nameTag := w.otherNameTag
 	messageTag := w.otherMessageTag
 	if msg.Own {
@@ -295,7 +333,7 @@ func (w *Window) appendTextToBrowser(msg message.ChatMessage) {
 	w.browser.ScrollToMark(mark, 0.0, true, 0.0, 1.0)
 }
 
-func (w *Window) browserLoop(inChan <-chan message.ChatMessage) {
+func (w *Window) browserLoop(inChan <-chan news.News) {
 	defer w.wg.Done()
 
 	for {

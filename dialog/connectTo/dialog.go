@@ -40,7 +40,6 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -307,17 +306,15 @@ func (d *Dialog) start() {
 					wg.Wait()
 
 					if state == vtc.Ok {
-						log.Println("connection established")
 						if d.initConnection(ssn, name, pin) {
-							log.Println("connection initialized")
 							glib.IdleAdd(func() {
 								d.self.Destroy()
-								chat.New(d.app, name, ssn).ShowAll()
+								if chatter := chat.New(d.app, vtc.Client, name, ssn); chatter != nil {
+									chatter.ShowAll()
+								}
 							})
 							return
 						}
-
-						// Wysłanie dnaych logowania
 					}
 				}
 

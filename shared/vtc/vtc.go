@@ -58,6 +58,8 @@ const (
 	Error
 	Cancel
 	SecurityBreach
+	Rejected
+	Accepted
 )
 
 const (
