@@ -364,7 +364,6 @@ func (d *Dialog) initConnection(ssn *session.Session, name, pin string) bool {
 				if data := ssn.Out.Requester.ReadRawMessage(); data != nil {
 					if plain := ssn.Out.Enigma.DecryptRsa(data); plain != nil {
 						if msg := message.NewFromJson(plain); msg != nil {
-							fmt.Println(msg)
 							return true
 						}
 					}

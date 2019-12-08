@@ -42,7 +42,6 @@ const (
 )
 
 func main() {
-
 	if app, err := gtk.ApplicationNew(appID, glib.APPLICATION_FLAGS_NONE); tr.IsOK(err) {
 		app.Connect("activate", func() {
 			tr.Init()

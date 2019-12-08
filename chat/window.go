@@ -139,8 +139,14 @@ func finalInit(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *s
 				if !ssn.SendKeys() {
 					return false
 				}
+				if !ssn.ExchangeBlockIdentifiersAsServer() {
+					return false
+				}
 			case vtc.Client:
 				if !ssn.ReadKeys() {
+					return false
+				}
+				if !ssn.ExchangeBlockIdentifiersAsClient() {
 					return false
 				}
 			}
@@ -278,7 +284,7 @@ func (w *Window) entryHandler(_, e interface{}) {
 					w.entryBuffer.Delete(w.entryBuffer.GetStartIter(), w.entryBuffer.GetEndIter())
 					w.entryBuffer.PlaceCursor(w.entryBuffer.GetIterAtLine(0))
 
-					if msg := news.New("john", text, true); msg.Valid() {
+					if msg := news.New(shared.MyUserName, text, true); msg.Valid() {
 						w.browserIn <- msg
 						// TODO: send message via network to my partner
 					}

@@ -30,14 +30,16 @@ package session
 
 import (
 	"Carmel/connector/stream"
+	"Carmel/secret"
 	"Carmel/secret/enigma"
 	"Carmel/shared/tr"
+	"Carmel/shared/vtc"
 	"encoding/json"
 )
 
 type Session struct {
-	In     *stream.Stream
-	Out    *stream.Stream
+	In     *stream.Stream // klient -> serwer
+	Out    *stream.Stream // serwer -> klient
 	Enigma *enigma.Enigma
 }
 
@@ -72,7 +74,6 @@ func (s *Session) SendKeys() bool {
 	if data, err := json.Marshal(s.Enigma.Keys); tr.IsOK(err) {
 		if cipher := s.Enigma.EncryptRSA(data); cipher != nil {
 			if s.Out.Requester.SendRawMessage(cipher) {
-				tr.Info("Wysłano klucze")
 				return true
 			}
 		}
@@ -90,7 +91,6 @@ func (s *Session) ReadKeys() bool {
 				if s.Enigma.InitBlowfish(s.Enigma.Keys.Blowfish) {
 					if s.Enigma.InitGhost(s.Enigma.Keys.Ghost) {
 						if s.Enigma.InitWay3(s.Enigma.Keys.Way3) {
-							tr.Info("Odebrano i zainicjowano wszystkie klucze.")
 							return true
 						}
 					}
@@ -101,56 +101,29 @@ func (s *Session) ReadKeys() bool {
 	return false
 }
 
-/*
-func (s *Session) ExchangeBlockIdentifiers(role vtc.RoleType) bool {
-	switch role {
-	case vtc.Server:
-		return s.exchangeBlockIdentifiersAsServer()
-	case vtc.Client:
-		return s.exchangeBlockIdentifiersAsClient()
+func (s *Session) ExchangeBlockIdentifiersAsServer() bool {
+	// serwer żada blok identyfikujący od klienta (wysyła własny)
+	if request := s.Out.Requester.Send(vtc.GetBlockID, s.Enigma.ServerId, nil); request != nil {
+		if answer := s.Out.Responder.Read(request); answer != nil {
+			if secret.AreSlicesEqual(answer.Data, s.Enigma.ClientId) {
+				return true
+			}
+		}
 	}
 	return false
 }
 
-func (s *Session) exchangeBlockIdentifiersAsServer() bool {
-	// Serwer jako pierwszy wysyła swój blok identyfikacyjny
-	if cipher := s.Enigma.EncryptRSA(s.Enigma.ServerId); cipher != nil {
-		if !s.In.Requester.SendRawMessage(cipher) {
-			return false
-		}
-	}
-
-	// Serwer odczytuje blok identyfikacyjny klienta
-	// i sprawdza jego poprawność.
-	if cipher := s.; cipher != nil {
-		if data := e.DecryptRsa(cipher); data != nil {
-			if !secret.AreSlicesEqual(data, e.ClientId) {
-				log.Println("invalid client identifier")
-				return false
-			}
-
-		}
-	}
-	return true
-}
-
-func (e *Enigma) exchangeBlockIdentifiersAsClient(iface *tcpiface.TCPInterface) bool {
-	// Klient odczytuje blok identyfikacyjny serwera
-	// i sprawdza jego poprawność.
-	if cipher := datagram.Read(iface); cipher != nil {
-		if data := e.DecryptRsa(cipher); data != nil {
-			if !secret.AreSlicesEqual(data, e.ServerId) {
-				log.Println("invalid server identifier")
-				return false
+func (s *Session) ExchangeBlockIdentifiersAsClient() bool {
+	// klient czeka na żądanie od serwera,
+	// jeśli wszystko jest ok odsyła swój block identyfikujący
+	if request := s.In.Requester.Read(); request != nil {
+		if request.Id == vtc.GetBlockID {
+			if secret.AreSlicesEqual(request.Data, s.Enigma.ServerId) {
+				if answer := s.In.Responder.Send(vtc.Ok, request, s.Enigma.ClientId, nil); answer != nil {
+					return true
+				}
 			}
 		}
 	}
-	// Klient wysyła swój blok identyfikacyjny
-	if cipher := e.EncryptRSA(e.ClientId); cipher != nil {
-		if !datagram.Send(iface, cipher) {
-			return false
-		}
-	}
-	return true
+	return false
 }
-*/

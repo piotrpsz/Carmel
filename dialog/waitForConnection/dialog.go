@@ -412,7 +412,7 @@ func createPortWidgets() (*gtk.Label, *gtk.Entry) {
 		if portEntry, err := gtk.EntryNew(); tr.IsOK(err) {
 			portPrompt.SetHAlign(gtk.ALIGN_END)
 			portPrompt.SetMarkup(fmt.Sprintf(promptFormat, "Port"))
-			portEntry.SetText("12345")
+			portEntry.SetText("40404")
 			return portPrompt, portEntry
 		}
 	}

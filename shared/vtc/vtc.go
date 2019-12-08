@@ -43,6 +43,7 @@ const (
 const (
 	_ uint32 = iota
 	Login
+	GetBlockID
 )
 
 const (
@@ -63,7 +64,7 @@ const (
 )
 
 const (
-	SignatureSize  int     = 512
+	SignatureSize  int     = 256
 	MessageTimeout float64 = 60 // w sekundach (1 min)
 )
 

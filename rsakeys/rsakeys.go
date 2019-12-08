@@ -134,6 +134,7 @@ func (m *Manager) CreateKeysForUser(userName string) bool {
 func (m *Manager) PrivateKeyFromFileForUser(userName string) *rsa.PrivateKey {
 	filePath := filepath.Join(m.dir, fmt.Sprintf(privateKeyFileNameFormat, userName))
 	if data, err := ioutil.ReadFile(filePath); tr.IsOK(err) {
+		//tr.Info("%s\n%s", userName, string(data))
 		if block, _ := pem.Decode(data); block != nil && block.Type == privateKeyType {
 			if privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes); tr.IsOK(err) {
 				return privateKey
@@ -146,6 +147,7 @@ func (m *Manager) PrivateKeyFromFileForUser(userName string) *rsa.PrivateKey {
 func (m *Manager) PublicKeyFromFileForUser(userName string) *rsa.PublicKey {
 	filePath := filepath.Join(m.dir, fmt.Sprintf(publicKeyFileNameFormat, userName))
 	if data, err := ioutil.ReadFile(filePath); tr.IsOK(err) {
+		//tr.Info("%s\n%s", userName, string(data))
 		if block, _ := pem.Decode(data); block != nil && block.Type == publicKeyType {
 			if publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes); tr.IsOK(err) {
 				return publicKey
