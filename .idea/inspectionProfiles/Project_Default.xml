@@ -31,6 +31,7 @@
         <method importPath="github.com/gotk3/gotk3/gtk" receiver="*Entry" name="Connect" />
         <method importPath="github.com/gotk3/gotk3/gtk" receiver="*TextView" name="Connect" />
         <method importPath="net" receiver="*TCPConn" name="Close" />
+        <method importPath="github.com/gotk3/gotk3/gtk" receiver="*CheckButton" name="Connect" />
       </methods>
     </inspection_tool>
     <inspection_tool class="SpellCheckingInspection" enabled="false" level="TYPO" enabled_by_default="false">

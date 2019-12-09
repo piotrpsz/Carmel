@@ -229,7 +229,7 @@ func (mw *MainWindow) waitForConnection() {
 		mw.notDefinedUserNameInfo()
 		return
 	}
-	if shared.MyIPAddr == "" {
+	if shared.MyLocalIP == "" {
 		mw.unknownIPAddress()
 		return
 	}
@@ -374,24 +374,8 @@ func (mw *MainWindow) canRecreateKeys(userName string) bool {
 ********************************************************************/
 
 func (mw *MainWindow) updateIP() {
-	shared.MyIPAddr = "192.168.1.117"
-	markup := fmt.Sprintf(ipFormat, shared.MyIPAddr)
+	markup := fmt.Sprintf(ipFormat, shared.MyLocalIP)
 	glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
-
-	//if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
-	//	defer response.Body.Close()
-	//	if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
-	//		data := make(map[string]interface{})
-	//		if err := json.Unmarshal(content, &data); tr.IsOK(err) {
-	//			if text, ok := data["ip"].(string); ok {
-	//				shared.MyIPAddr = text
-	//				markup := fmt.Sprintf(ipFormat, text)
-	//				glib.IdleAdd(mw.ipAddr.SetMarkup, markup)
-	//			}
-	//		}
-	//	}
-	//}
-
 }
 
 func (mw *MainWindow) updateUser() {

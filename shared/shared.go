@@ -30,10 +30,13 @@ package shared
 
 import (
 	"Carmel/shared/tr"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,9 +61,15 @@ const (
 )
 
 var (
-	MyIPAddr   string
-	MyUserName string
+	MyInternetIP string
+	MyLocalIP    string
+	MyUserName   string
 )
+
+func init() {
+	MyInternetIP = internetIP()
+	MyLocalIP = localIP()
+}
 
 func AppNameAndVersion() string {
 	return fmt.Sprintf("%s %s", AppName, AppVersion)
@@ -245,4 +254,39 @@ func WriteToFile(filePath string, data []byte) bool {
 		}
 	}
 	return false
+}
+
+func internetIP() string {
+	if response, err := http.Get("https://api.ipify.org/?format=json"); tr.IsOK(err) {
+		defer response.Body.Close()
+		if content, err := ioutil.ReadAll(response.Body); tr.IsOK(err) {
+			data := make(map[string]interface{})
+			if err := json.Unmarshal(content, &data); tr.IsOK(err) {
+				if text, ok := data["ip"].(string); ok {
+					return text
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func localIP() string {
+	if addresses := lookup(); addresses != nil {
+		for _, ip := range addresses {
+			if ip.To4() != nil && !ip.IsLoopback() {
+				return ip.String()
+			}
+		}
+	}
+	return ""
+}
+
+func lookup() []net.IP {
+	if hostname, err := os.Hostname(); tr.IsOK(err) {
+		if retv, err := net.LookupIP(hostname); tr.IsOK(err) {
+			return retv
+		}
+	}
+	return nil
 }

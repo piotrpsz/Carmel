@@ -87,6 +87,7 @@ type Dialog struct {
 	pinBtn            *gtk.Button
 	copyBtn           *gtk.Button
 	cancelBtn         *gtk.Button
+	internetCheck     *gtk.CheckButton
 	connectionAttempt bool
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -186,28 +187,43 @@ func (d *Dialog) createContent() *gtk.Grid {
 			if portPrompt, portEntry := createPortWidgets(); portPrompt != nil {
 				if namePrompt, nameLabel := createUsernameWidgets(); namePrompt != nil {
 					if pinPrompt, pinLabel := createPINWidgets(); pinPrompt != nil {
-						if spinner, err := gtk.SpinnerNew(); tr.IsOK(err) {
-							d.ipLabel = ipLabel
-							d.portEntry = portEntry
-							d.nameLabel = nameLabel
-							d.pinLabel = pinLabel
-							d.spinner = spinner
+						if internetCheck := createInternetChecker(); internetCheck != nil {
+							if spinner, err := gtk.SpinnerNew(); tr.IsOK(err) {
 
-							y := 0
-							grid.Attach(spinner, 0, y, 2, 1)
-							y++
-							grid.Attach(ipPrompt, 0, y, 1, 1)
-							grid.Attach(ipLabel, 1, y, 1, 1)
-							y++
-							grid.Attach(portPrompt, 0, y, 1, 1)
-							grid.Attach(portEntry, 1, y, 1, 1)
-							y++
-							grid.Attach(namePrompt, 0, y, 1, 1)
-							grid.Attach(nameLabel, 1, y, 1, 1)
-							y++
-							grid.Attach(pinPrompt, 0, y, 1, 1)
-							grid.Attach(pinLabel, 1, y, 1, 1)
-							return grid
+								if shared.MyInternetIP != "" {
+									internetCheck.Connect("toggled", func() {
+										if internetCheck.GetActive() {
+											ipLabel.SetText(shared.MyInternetIP)
+										} else {
+											ipLabel.SetText(shared.MyLocalIP)
+										}
+									})
+								}
+
+								d.ipLabel = ipLabel
+								d.portEntry = portEntry
+								d.nameLabel = nameLabel
+								d.pinLabel = pinLabel
+								d.spinner = spinner
+								d.internetCheck = internetCheck
+
+								y := 0
+								grid.Attach(spinner, 0, y, 2, 1)
+								y++
+								grid.Attach(ipPrompt, 0, y, 1, 1)
+								grid.Attach(ipLabel, 1, y, 1, 1)
+								grid.Attach(internetCheck, 2, y, 1, 1)
+								y++
+								grid.Attach(portPrompt, 0, y, 1, 1)
+								grid.Attach(portEntry, 1, y, 2, 1)
+								y++
+								grid.Attach(namePrompt, 0, y, 1, 1)
+								grid.Attach(nameLabel, 1, y, 2, 1)
+								y++
+								grid.Attach(pinPrompt, 0, y, 1, 1)
+								grid.Attach(pinLabel, 1, y, 2, 1)
+								return grid
+							}
 						}
 					}
 				}
@@ -399,12 +415,22 @@ func createIPWidgets() (*gtk.Label, *gtk.Label) {
 			ipPrompt.SetHAlign(gtk.ALIGN_END)
 			ipLabel.SetHAlign(gtk.ALIGN_START)
 			ipPrompt.SetMarkup(fmt.Sprintf(promptFormat, "IP"))
-			ipLabel.SetMarkup(fmt.Sprintf(enabledValueFormat, shared.MyIPAddr))
+			ipLabel.SetMarkup(fmt.Sprintf(enabledValueFormat, shared.MyLocalIP))
 
 			return ipPrompt, ipLabel
 		}
 	}
 	return nil, nil
+}
+
+func createInternetChecker() *gtk.CheckButton {
+	if check, err := gtk.CheckButtonNewWithLabel("Internet"); tr.IsOK(err) {
+		if shared.MyInternetIP == "" {
+			check.SetSensitive(false)
+		}
+		return check
+	}
+	return nil
 }
 
 func createPortWidgets() (*gtk.Label, *gtk.Entry) {
