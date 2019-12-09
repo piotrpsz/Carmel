@@ -44,6 +44,7 @@ const (
 	_ uint32 = iota
 	Login
 	GetBlockID
+	Message
 )
 
 const (

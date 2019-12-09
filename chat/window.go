@@ -80,26 +80,22 @@ var (
 )
 
 type Window struct {
-	app           *gtk.Application
-	win           *gtk.ApplicationWindow
-	buddyName     string
-	ssn           *session.Session
-	browser       *gtk.TextView
-	browserBuffer *gtk.TextBuffer
-	entry         *gtk.TextView
-	entryBuffer   *gtk.TextBuffer
-
-	// browser tags
+	app             *gtk.Application
+	win             *gtk.ApplicationWindow
+	buddyName       string
+	ssn             *session.Session
+	browser         *gtk.TextView
+	browserBuffer   *gtk.TextBuffer
+	entry           *gtk.TextView
+	entryBuffer     *gtk.TextBuffer
 	myNameTag       *gtk.TextTag
 	myMessageTag    *gtk.TextTag
 	otherNameTag    *gtk.TextTag
 	otherMessageTag *gtk.TextTag
-
-	// golang
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	browserIn chan news.News
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	buddyNewsChan   chan news.News
 }
 
 func New(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session.Session) *Window {
@@ -189,9 +185,11 @@ func dialogUnknownRSAKey(app *gtk.Application, buddyName string) {
 }
 
 func (w *Window) ShowAll() {
-	w.browserIn = make(chan news.News)
-	w.wg.Add(1)
-	go w.browserLoop(w.browserIn)
+	w.buddyNewsChan = make(chan news.News)
+	w.wg.Add(2)
+
+	go w.browserLoop(w.buddyNewsChan, &w.wg)
+	go w.netLoop(w.buddyNewsChan, &w.wg)
 
 	w.win.ShowAll()
 	w.entry.GrabFocus()
@@ -200,7 +198,7 @@ func (w *Window) ShowAll() {
 func (w *Window) Close() {
 	w.cancel()
 	w.wg.Wait()
-	close(w.browserIn)
+	close(w.buddyNewsChan)
 	w.win.Close()
 }
 
@@ -285,8 +283,11 @@ func (w *Window) entryHandler(_, e interface{}) {
 					w.entryBuffer.PlaceCursor(w.entryBuffer.GetIterAtLine(0))
 
 					if msg := news.New(shared.MyUserName, text, true); msg.Valid() {
-						w.browserIn <- msg
-						// TODO: send message via network to my partner
+						if request := w.ssn.Out.Requester.Send(vtc.Message, []byte(text), nil); request != nil {
+							if answer := w.ssn.Out.Responder.Read(request); answer != nil {
+								w.buddyNewsChan <- msg
+							}
+						}
 					}
 				}
 			}
@@ -339,8 +340,8 @@ func (w *Window) appendTextToBrowser(msg news.News) {
 	w.browser.ScrollToMark(mark, 0.0, true, 0.0, 1.0)
 }
 
-func (w *Window) browserLoop(inChan <-chan news.News) {
-	defer w.wg.Done()
+func (w *Window) browserLoop(inChan <-chan news.News, wg *sync.WaitGroup) {
+	defer wg.Done()
 
 	for {
 		select {
@@ -349,6 +350,28 @@ func (w *Window) browserLoop(inChan <-chan news.News) {
 			return
 		case msg := <-inChan:
 			w.appendTextToBrowser(msg)
+		}
+	}
+}
+
+func (w *Window) netLoop(inChan chan<- news.News, wg *sync.WaitGroup) {
+	defer w.ssn.Close()
+
+	for {
+		select {
+		case <-w.ctx.Done():
+			fmt.Println(w.ctx.Err())
+			return
+		default:
+			if request := w.ssn.In.Requester.Read(); request != nil {
+				if request.Id == vtc.Message {
+					if answer := w.ssn.In.Responder.Send(vtc.Ok, request, nil, nil); answer != nil {
+						if msg := news.New(w.buddyName, string(request.Data), false); msg.Valid() {
+							inChan <- msg
+						}
+					}
+				}
+			}
 		}
 	}
 }
