@@ -108,6 +108,9 @@ func New(key []byte) *Blowfish {
 	return bf
 }
 
+// EncryptCBC - implementation with random IV described in (pages 66-67)
+// "Cryptography Engineering - Design, Principles and Practical Applications"
+// Niels Fergusson, Bruce Schneier, Tadayoshi Kohno
 func (bf *Blowfish) EncryptCBC(plainText, iv []byte) []byte {
 	nbytes := len(plainText)
 	n := nbytes % blockSize
@@ -304,18 +307,18 @@ func (bf *Blowfish) decryptBlock(xl, xr uint32) (uint32, uint32) {
 }
 
 func (bf *Blowfish) bytes2block(data []byte) (uint32, uint32) {
-	w0 := (uint32(data[3]) << 24) | (uint32(data[2]) << 16) | (uint32(data[1]) << 8) | uint32(data[0])
-	w1 := (uint32(data[7]) << 24) | (uint32(data[6]) << 16) | (uint32(data[5]) << 8) | uint32(data[4])
+	w0 := uint32(data[0])<<24 | uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
+	w1 := uint32(data[4])<<24 | uint32(data[5])<<16 | uint32(data[6])<<8 | uint32(data[7])
 	return w0, w1
 }
 
 func (bf *Blowfish) block2bytes(a0, a1 uint32, o []byte) {
-	o[7] = byte((a1 >> 24) & 0xff)
-	o[6] = byte((a1 >> 16) & 0xff)
-	o[5] = byte((a1 >> 8) & 0xff)
-	o[4] = byte(a1 & 0xff)
-	o[3] = byte((a0 >> 24) & 0xff)
-	o[2] = byte((a0 >> 16) & 0xff)
-	o[1] = byte((a0 >> 8) & 0xff)
-	o[0] = byte(a0 & 0xff)
+	o[7] = byte(a1)
+	o[6] = byte(a1 >> 8)
+	o[5] = byte(a1 >> 16)
+	o[4] = byte(a1 >> 24)
+	o[3] = byte(a0)
+	o[2] = byte(a0 >> 8)
+	o[1] = byte(a0 >> 16)
+	o[0] = byte(a0 >> 24)
 }

@@ -93,19 +93,16 @@ func BytesAsString(a []byte) string {
 }
 
 func BytesToUint32(data []byte) uint32 {
-	return (uint32(data[3]) << 24) |
-		(uint32(data[2]) << 16) |
-		(uint32(data[1]) << 8) |
-		(uint32(data[0]))
+	return (uint32(data[3]) << 24) | (uint32(data[2]) << 16) | (uint32(data[1]) << 8) | (uint32(data[0]))
 }
 
 func Uint32ToBytes(v uint32) []byte {
 	data := [4]byte{}
 
-	data[3] = byte(v>>24) & 0xff
-	data[2] = byte(v>>16) & 0xff
-	data[1] = byte(v>>8) & 0xff
-	data[0] = byte(v & 0xff)
+	data[3] = byte(v >> 24)
+	data[2] = byte(v >> 16)
+	data[1] = byte(v >> 8)
+	data[0] = byte(v)
 
 	return data[:]
 }
