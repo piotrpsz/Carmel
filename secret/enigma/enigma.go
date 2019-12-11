@@ -32,7 +32,7 @@ import (
 	"Carmel/rsakeys"
 	"Carmel/secret"
 	"Carmel/secret/enigma/blowfish"
-	"Carmel/secret/enigma/ghost"
+	"Carmel/secret/enigma/gost"
 	"Carmel/secret/enigma/way3"
 	"Carmel/shared"
 	"Carmel/shared/tr"
@@ -49,7 +49,7 @@ type Enigma struct {
 	privateKey     *rsa.PrivateKey    // my private RSA key
 	buddyPublicKey *rsa.PublicKey     // client's RSA public key
 	bf             *blowfish.Blowfish // blowfish
-	gt             *ghost.Gost        // ghost
+	gt             *gost.Gost         // gost
 	w3             *way3.Way3         // 3-way
 	Keys           vtc.Keys
 }
@@ -107,10 +107,10 @@ func (e *Enigma) InitBlowfish(key []byte) bool {
 	return false
 }
 
-func (e *Enigma) InitGhost(key []byte) bool {
-	if gt := ghost.New(key); gt != nil {
+func (e *Enigma) InitGost(key []byte) bool {
+	if gt := gost.New(key); gt != nil {
 		e.gt = gt
-		e.Keys.Ghost = key
+		e.Keys.Gost = key
 		return true
 	}
 	return false
@@ -167,7 +167,7 @@ func (e *Enigma) IsValidSignature(sign, data []byte) bool {
 
 // We use a three-stage EDE encryption system (Encryption-Decryption-Encryption)
 // 1. Encryption - Blowfish CBC
-// 2. Decryption - Ghost ECB
+// 2. Decryption - Gost ECB
 // 3. Encryption - 3-Way CBC
 // Notice: we perform all encryptions using a randomly generated IV
 func (e *Enigma) Encrypt(plain []byte) []byte {
@@ -205,6 +205,6 @@ func (e *Enigma) Decrypt(cipher []byte) []byte {
 
 func (e *Enigma) ClearKeys() {
 	secret.ClearSlice(&e.Keys.Blowfish)
-	secret.ClearSlice(&e.Keys.Ghost)
+	secret.ClearSlice(&e.Keys.Gost)
 	secret.ClearSlice(&e.Keys.Way3)
 }

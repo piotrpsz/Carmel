@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package ghost
+package gost
 
 import (
 	"Carmel/secret"
@@ -51,7 +51,7 @@ type Gost struct {
 // The key size not equal 256 bit is treated as an error.
 func New(key []byte) *Gost {
 	if (len(key)) != KeySize {
-		log.Printf("Ghost error. Invalid key length. Is %d bit, should be 256 bit.\n", 8*len(key))
+		log.Printf("Gost error. Invalid key length. Is %d bit, should be 256 bit.\n", 8*len(key))
 		return nil
 	}
 
@@ -303,12 +303,12 @@ func (gost *Gost) bytes2block(data []byte) (uint32, uint32) {
 }
 
 func (gost *Gost) block2bytes(a0, a1 uint32, output []byte) {
-	output[7] = byte((a1 >> 24) & 0xff)
-	output[6] = byte((a1 >> 16) & 0xff)
-	output[5] = byte((a1 >> 8) & 0xff)
-	output[4] = byte(a1 & 0xff)
-	output[3] = byte((a0 >> 24) & 0xff)
-	output[2] = byte((a0 >> 16) & 0xff)
-	output[1] = byte((a0 >> 8) & 0xff)
-	output[0] = byte(a0 & 0xff)
+	output[7] = byte(a1 >> 24)
+	output[6] = byte(a1 >> 16)
+	output[5] = byte(a1 >> 8)
+	output[4] = byte(a1)
+	output[3] = byte(a0 >> 24)
+	output[2] = byte(a0 >> 16)
+	output[1] = byte(a0 >> 8)
+	output[0] = byte(a0)
 }

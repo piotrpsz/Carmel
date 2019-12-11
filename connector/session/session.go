@@ -89,7 +89,7 @@ func (s *Session) ReadKeys() bool {
 		if data := s.Enigma.DecryptRsa(cipher); data != nil {
 			if err := json.Unmarshal(data, &s.Enigma.Keys); tr.IsOK(err) {
 				if s.Enigma.InitBlowfish(s.Enigma.Keys.Blowfish) {
-					if s.Enigma.InitGhost(s.Enigma.Keys.Ghost) {
+					if s.Enigma.InitGost(s.Enigma.Keys.Gost) {
 						if s.Enigma.InitWay3(s.Enigma.Keys.Way3) {
 							return true
 						}

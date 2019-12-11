@@ -35,7 +35,7 @@ import (
 	"Carmel/secret"
 	"Carmel/secret/enigma"
 	"Carmel/secret/enigma/blowfish"
-	"Carmel/secret/enigma/ghost"
+	"Carmel/secret/enigma/gost"
 	"Carmel/secret/enigma/way3"
 	"Carmel/shared/tr"
 	"Carmel/shared/vtc"
@@ -69,7 +69,7 @@ func Server(port int, e *enigma.Enigma) *Stream {
 
 func (s *Stream) InitKeys() bool {
 	if key := secret.RandomBytes(blowfish.MaxKeyLength); s.Enigma.InitBlowfish(key) {
-		if key := secret.RandomBytes(ghost.KeySize); s.Enigma.InitGhost(key) {
+		if key := secret.RandomBytes(gost.KeySize); s.Enigma.InitGost(key) {
 			if key := secret.RandomBytes(way3.KeySize); s.Enigma.InitWay3(key) {
 				return true
 			}

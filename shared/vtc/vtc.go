@@ -113,6 +113,6 @@ var RandomBytes = []byte{
 
 type Keys struct {
 	Blowfish []byte `json:"blowfish,omitempty"`
-	Ghost    []byte `json:"ghost,omitempty"`
+	Gost     []byte `json:"gost,omitempty"`
 	Way3     []byte `json:"way3, omitempty"`
 }
