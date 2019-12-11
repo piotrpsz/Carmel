@@ -77,12 +77,19 @@ func AppNameAndVersion() string {
 
 func AppDir() string {
 	if homeDir, err := os.UserHomeDir(); tr.IsOK(err) {
-		appDir := filepath.Join(homeDir, appDir)
+		appDir := filepath.Join(homeDir, getAppDir())
 		if CreateDirIfNeeded(appDir) {
 			return appDir
 		}
 	}
 	return ""
+}
+
+func getAppDir() string {
+	if dir, ok := os.LookupEnv("USEDIR"); ok && (dir != "") {
+		return "." + dir
+	}
+	return appDir
 }
 
 func RSAKeysDir() string {

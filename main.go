@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	appID = "pl.beesoft.gtk3.carmel2"
+	appID = "pl.beesoft.gtk3.carmel"
 )
 
 func main() {
