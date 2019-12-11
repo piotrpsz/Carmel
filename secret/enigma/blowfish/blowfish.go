@@ -30,17 +30,19 @@ package blowfish
 
 import (
 	"Carmel/secret"
+	"crypto/subtle"
 	"log"
 )
 
 const (
-	blockSize    = 8  // in bytes (64-bit, two uint32 words)
+	blockSize    = 8 // in bytes (64-bit, two uint32 words)
+	roundCount   = 16
 	MinKeyLength = 4  // in bytes
 	MaxKeyLength = 56 // in bytes
 )
 
 type Blowfish struct {
-	p [16 + 2]uint32
+	p [roundCount + 2]uint32
 	s [4][256]uint32
 }
 
@@ -62,7 +64,7 @@ func New(key []byte) *Blowfish {
 
 	// P - init
 	k := 0
-	for i := 0; i < (16 + 2); i++ {
+	for i := 0; i < (roundCount + 2); i++ {
 		data := uint32(0)
 		for j := 0; j < 4; j++ {
 			data = (data << 8) | uint32(key[k])
@@ -117,21 +119,20 @@ func (bf *Blowfish) EncryptCBC(plainText, iv []byte) []byte {
 	if n != 0 {
 		dn := blockSize - n
 		plainText = append(plainText, secret.Padding(dn)...)
-		nbytes += dn
+		nbytes = len(plainText)
 	}
 	if iv == nil {
-		tiv := secret.RandomBytes(blockSize)
-		if tiv == nil {
+		iv = secret.RandomBytes(blockSize)
+		if iv == nil {
 			return nil
 		}
-		iv = tiv
+	}
+	if len(iv) != blockSize {
+		return nil
 	}
 
 	buffer := make([]byte, nbytes+blockSize)
-
-	for i := 0; i < blockSize; i++ {
-		buffer[i] = iv[i]
-	}
+	subtle.ConstantTimeCopy(1, buffer[:blockSize], iv)
 
 	n1, n2 := bf.bytes2block(iv)
 	for i := 0; i < nbytes; i += blockSize {

@@ -219,3 +219,15 @@ func Test_BlockECB(t *testing.T) {
 		assert.True(t, ok)
 	}
 }
+
+func Test_CBC(t *testing.T) {
+	iv := secret.RandomBytes(blockSize)
+	key := secret.RandomBytes(MaxKeyLength)
+
+	bf := New(key)
+
+	plain := []byte("Beesoft Software, Piotr Pszczółkowski")
+	cipher := bf.EncryptCBC(plain, iv)
+	ok := secret.AreSlicesEqual(plain, bf.DecryptCBC(cipher))
+	assert.True(t, ok)
+}
