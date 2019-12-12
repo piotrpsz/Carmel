@@ -83,12 +83,14 @@ func Client(addr string, port int, e *enigma.Enigma, timeout int) *Stream {
 }
 
 func (s *Stream) Close() {
-	defer func() {
+	if s.Responder != nil {
+		s.Responder.Close()
 		s.Responder = nil
+	}
+	if s.Requester != nil {
+		s.Requester.Close()
 		s.Requester = nil
-	}()
-	s.Responder.Close()
-	s.Requester.Close()
+	}
 }
 
 /********************************************************************

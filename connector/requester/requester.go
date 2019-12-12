@@ -57,10 +57,10 @@ func New(iface *tcpiface.TCPInterface, e *enigma.Enigma) *Requester {
 }
 
 func (r *Requester) Close() {
-	defer func() {
+	if r.iface != nil {
+		r.iface.Close()
 		r.iface = nil
-	}()
-	r.iface.Close()
+	}
 }
 
 func (r *Requester) IsValid(msg *message.Message, tstamp time.Time) bool {

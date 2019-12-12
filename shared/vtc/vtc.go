@@ -45,6 +45,7 @@ const (
 	Login
 	GetBlockID
 	Message
+	Logout
 )
 
 const (

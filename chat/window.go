@@ -30,7 +30,6 @@ package chat
 
 import (
 	"Carmel/chat/news"
-	"Carmel/connector/message"
 	"Carmel/connector/session"
 	"Carmel/shared"
 	"Carmel/shared/tr"
@@ -46,13 +45,13 @@ import (
 )
 
 const (
-	MyNameTag            = "my_name"
-	MyMessageTag         = "my_message"
-	OtherNameTag         = "other_name"
-	OtherMessageTag      = "other_message"
-	subtitleFormat       = "IP: %s"
-	canConnectFormat     = "Would you like to chat with %s?"
-	rsaKeyNotFoundFormat = "RSA public key for %s not found"
+	MyNameTag        = "my_name"
+	MyMessageTag     = "my_message"
+	OtherNameTag     = "other_name"
+	OtherMessageTag  = "other_message"
+	subtitleFormat   = "IP: %s"
+	canConnectFormat = "Would you like to chat with %s?"
+	connectionClosed = "Connection with %s is closed"
 )
 
 var (
@@ -82,6 +81,7 @@ var (
 type Window struct {
 	app             *gtk.Application
 	win             *gtk.ApplicationWindow
+	headerBar       *gtk.HeaderBar
 	buddyName       string
 	ssn             *session.Session
 	browser         *gtk.TextView
@@ -92,22 +92,25 @@ type Window struct {
 	myMessageTag    *gtk.TextTag
 	otherNameTag    *gtk.TextTag
 	otherMessageTag *gtk.TextTag
+	stopAction      *glib.SimpleAction
 	ctx             context.Context
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	buddyNewsChan   chan news.News
+	connectionInUse bool
+	mutex           sync.Mutex
 }
 
 func New(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session.Session) *Window {
 	if finalInit(app, role, buddyName, ssn) {
 		if win, err := gtk.ApplicationWindowNew(app); tr.IsOK(err) {
-			w := &Window{app: app, win: win, buddyName: buddyName, ssn: ssn}
-			if headerBar := w.createHeaderBar(); headerBar != nil {
+			w := &Window{app: app, win: win, buddyName: buddyName, ssn: ssn, connectionInUse: true}
+			if w.headerBar = w.createHeaderBar(); w.headerBar != nil {
 				if menuButton := w.createMenu(); menuButton != nil {
-					headerBar.PackEnd(menuButton)
+					w.headerBar.PackEnd(menuButton)
 					if content := w.createContent(); content != nil {
 						win.Add(content)
-						win.SetTitlebar(headerBar)
+						win.SetTitlebar(w.headerBar)
 						win.SetDefaultSize(400, 400)
 
 						w.ctx, w.cancel = context.WithCancel(context.Background())
@@ -120,73 +123,9 @@ func New(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session
 	return nil
 }
 
-func finalInit(app *gtk.Application, role vtc.RoleType, buddyName string, ssn *session.Session) bool {
-	// Wszystko do tej pory poszło dobrze, ale może się okazać że
-	// nie mamy publicznego klucza RSA dla wskazanej osoby.
-	// Jeśli tak by było to dupa.
-	if ssn.In.Enigma.SetBuddyRSAPublicKey(buddyName) {
-		// Możemy kontynuuować komunikację, ale czy na pewno chcemy?
-		if dialogCanConnectWith(app, buddyName) {
-			switch role {
-			case vtc.Server:
-				if !sendAcceptance(ssn) {
-					return false
-				}
-				if !ssn.SendKeys() {
-					return false
-				}
-				if !ssn.ExchangeBlockIdentifiersAsServer() {
-					return false
-				}
-			case vtc.Client:
-				if !ssn.ReadKeys() {
-					return false
-				}
-				if !ssn.ExchangeBlockIdentifiersAsClient() {
-					return false
-				}
-			}
-			return true
-		}
-	}
-	return false
-}
-
-func sendAcceptance(ssn *session.Session) bool {
-	msg := message.NewWithType(vtc.Answer)
-	msg.Id = vtc.Login
-	msg.Status = vtc.Accepted
-	msg.Tstamp = shared.Now()
-	if data := msg.ToJsonSnapped(); data != nil {
-		if cipher := ssn.In.Enigma.EncryptRSA(data); cipher != nil {
-			return ssn.In.Requester.SendRawMessage(cipher)
-		}
-	}
-	return false
-}
-
-func dialogCanConnectWith(app *gtk.Application, buddyName string) bool {
-	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO, ""); dialog != nil {
-		defer dialog.Destroy()
-		dialog.FormatSecondaryText(fmt.Sprintf(canConnectFormat, buddyName))
-		if dialog.Run() == gtk.RESPONSE_YES {
-			return true
-		}
-	}
-	return false
-}
-
-func dialogUnknownRSAKey(app *gtk.Application, buddyName string) {
-	if dialog := gtk.MessageDialogNew(app.GetActiveWindow(), gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_CLOSE, ""); dialog != nil {
-		defer dialog.Destroy()
-		dialog.FormatSecondaryText(fmt.Sprintf(rsaKeyNotFoundFormat, buddyName))
-		dialog.Run()
-	}
-}
-
 func (w *Window) ShowAll() {
 	w.buddyNewsChan = make(chan news.News)
-	w.wg.Add(2)
+	w.wg.Add(1)
 
 	go w.browserLoop(w.buddyNewsChan, &w.wg)
 	go w.netLoop(w.buddyNewsChan, &w.wg)
@@ -195,11 +134,55 @@ func (w *Window) ShowAll() {
 	w.entry.GrabFocus()
 }
 
-func (w *Window) Close() {
-	w.cancel()
-	w.wg.Wait()
-	close(w.buddyNewsChan)
+// Akcja wywołana ponieważ użytkownik wybrał 'Quit' w menu okna,
+func (w *Window) closeWindowAction() {
+	if w.connectionInUse {
+		w.stopConnectionAction()
+	}
 	w.win.Close()
+}
+
+// Akcja wywołana ponieważ użytkownik wybrał 'Stop' w menu okna.
+func (w *Window) stopConnectionAction() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.connectionInUse {
+		w.sendDisconnectRequest()
+		w.dialogConnectionClosed()
+		w.cancel()
+		w.ssn.Close()
+		close(w.buddyNewsChan)
+		w.disableWidget()
+		w.connectionInUse = false
+		w.stopAction.SetEnabled(false)
+	}
+}
+
+// Funkcja wywoływana po stwierdzeniu, że kolega zamknął połączenie.
+func (w *Window) buddyClosedConnection() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.connectionInUse {
+		w.dialogConnectionClosed()
+		w.cancel()
+		w.ssn.Close()
+		close(w.buddyNewsChan)
+		w.disableWidget()
+		w.connectionInUse = false
+		w.stopAction.SetEnabled(false)
+	}
+}
+
+func (w *Window) disableWidget() {
+	glib.IdleAdd(func() {
+		w.browser.SetSensitive(false)
+		w.entry.SetSensitive(false)
+		title := w.headerBar.GetTitle()
+		w.headerBar.SetTitle(title + " (closed)")
+		w.headerBar.SetSubtitle("")
+	})
 }
 
 func (w *Window) createHeaderBar() *gtk.HeaderBar {
@@ -216,10 +199,16 @@ func (w *Window) createHeaderBar() *gtk.HeaderBar {
 func (w *Window) createMenu() *gtk.MenuButton {
 	if btn, err := gtk.MenuButtonNew(); tr.IsOK(err) {
 		if menu := glib.MenuNew(); menu != nil {
+			menu.Append("Stop", "win.stop")
 			menu.Append("Quit", "win.close")
 
+			stopAction := glib.SimpleActionNew("stop", nil)
+			stopAction.Connect("activate", w.stopConnectionAction)
+			w.win.AddAction(stopAction)
+			w.stopAction = stopAction
+
 			closeAction := glib.SimpleActionNew("close", nil)
-			closeAction.Connect("activate", w.Close)
+			closeAction.Connect("activate", w.closeWindowAction)
 			w.win.AddAction(closeAction)
 
 			btn.SetMenuModel(&menu.MenuModel)
@@ -288,6 +277,7 @@ func (w *Window) entryHandler(_, e interface{}) {
 								w.buddyNewsChan <- msg
 							}
 						}
+
 					}
 				}
 			}
@@ -346,7 +336,7 @@ func (w *Window) browserLoop(inChan <-chan news.News, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-w.ctx.Done():
-			fmt.Println(w.ctx.Err())
+			tr.Info("%v", w.ctx.Err())
 			return
 		case msg := <-inChan:
 			w.appendTextToBrowser(msg)
@@ -355,23 +345,32 @@ func (w *Window) browserLoop(inChan <-chan news.News, wg *sync.WaitGroup) {
 }
 
 func (w *Window) netLoop(inChan chan<- news.News, wg *sync.WaitGroup) {
-	defer w.ssn.Close()
+	defer func() {
+		w.ssn.Close()
+		//wg.Done()
+	}()
 
 	for {
 		select {
 		case <-w.ctx.Done():
-			fmt.Println(w.ctx.Err())
+			tr.Info("%v", w.ctx.Err())
 			return
 		default:
 			if request := w.ssn.In.Requester.Read(); request != nil {
-				if request.Id == vtc.Message {
+				switch request.Id {
+				case vtc.Message:
 					if answer := w.ssn.In.Responder.Send(vtc.Ok, request, nil, nil); answer != nil {
 						if msg := news.New(w.buddyName, string(request.Data), false); msg.Valid() {
 							inChan <- msg
+							continue
 						}
+					}
+				case vtc.Logout:
+					if answer := w.ssn.In.Responder.Send(vtc.Ok, request, nil, nil); answer != nil {
 					}
 				}
 			}
+			w.buddyClosedConnection()
 		}
 	}
 }

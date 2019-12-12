@@ -58,13 +58,17 @@ func ClientNew(addr string, port int, buddyName string, timeout int) *Session {
 }
 
 func (s *Session) Close() {
-	defer func() {
+	if s.In != nil {
+		s.In.Close()
 		s.In = nil
+	}
+	if s.Out != nil {
+		s.Out.Close()
 		s.Out = nil
-	}()
-	s.In.Close()
-	s.Out.Close()
-	s.Enigma = nil
+	}
+	if s.Enigma != nil {
+		s.Enigma = nil
+	}
 }
 
 // Serwer wysyła do klienta wszystki klucze symetryczne.
