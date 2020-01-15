@@ -58,7 +58,7 @@ func New(key []byte) *Way3 {
 		return nil
 	}
 	tw := new(Way3)
-	k0, k1, k2 := tw.bytes2block(key)
+	k0, k1, k2 := bytes3block(key)
 	tw.keyGenerator(k0, k1, k2)
 	return tw
 }
@@ -106,9 +106,9 @@ func (tw *Way3) EncryptECB(plainText []byte) []byte {
 
 	buffer := make([]byte, nbytes)
 	for i := 0; i < nbytes; i += blockSize {
-		a0, a1, a2 := tw.bytes2block(plainText[i:])
+		a0, a1, a2 := bytes3block(plainText[i:])
 		c0, c1, c2 := tw.encryptBlock(a0, a1, a2)
-		tw.block2bytes(c0, c1, c2, buffer[i:])
+		block3bytes(c0, c1, c2, buffer[i:])
 	}
 	return buffer
 }
@@ -121,9 +121,9 @@ func (tw *Way3) DecryptECB(cipherText []byte) []byte {
 	buffer := make([]byte, nbytes)
 
 	for i := 0; i < nbytes; i += blockSize {
-		c0, c1, c2 := tw.bytes2block(cipherText[i:])
+		c0, c1, c2 := bytes3block(cipherText[i:])
 		a0, a1, a2 := tw.decryptBlock(c0, c1, c2)
-		tw.block2bytes(a0, a1, a2, buffer[i:])
+		block3bytes(a0, a1, a2, buffer[i:])
 	}
 
 	if idx := secret.PaddingIndex(buffer); idx != -1 {
@@ -156,11 +156,11 @@ func (tw *Way3) EncryptCBC(plainText, iv []byte) []byte {
 		buffer[i] = iv[i]
 	}
 
-	a0, a1, a2 := tw.bytes2block(iv)
+	a0, a1, a2 := bytes3block(iv)
 	for i := 0; i < nbytes; i += blockSize {
-		t0, t1, t2 := tw.bytes2block(plainText[i:])
+		t0, t1, t2 := bytes3block(plainText[i:])
 		a0, a1, a2 = tw.encryptBlock(t0^a0, t1^a1, t2^a2)
-		tw.block2bytes(a0, a1, a2, buffer[(i+blockSize):])
+		block3bytes(a0, a1, a2, buffer[(i+blockSize):])
 	}
 	return buffer
 }
@@ -172,12 +172,12 @@ func (tw *Way3) DecryptCBC(cipherText []byte) []byte {
 	nbytes := len(cipherText)
 
 	buffer := make([]byte, nbytes-blockSize)
-	p0, p1, p2 := tw.bytes2block(cipherText)
+	p0, p1, p2 := bytes3block(cipherText)
 	for i := blockSize; i < nbytes; i += blockSize {
-		a0, a1, a2 := tw.bytes2block(cipherText[i:])
+		a0, a1, a2 := bytes3block(cipherText[i:])
 		t0, t1, t2 := a0, a1, a2
 		c0, c1, c2 := tw.decryptBlock(a0, a1, a2)
-		tw.block2bytes(c0^p0, c1^p1, c2^p2, buffer[(i-blockSize):])
+		block3bytes(c0^p0, c1^p1, c2^p2, buffer[(i-blockSize):])
 		p0, p1, p2 = t0, t1, t2
 	}
 
@@ -273,26 +273,26 @@ func rho(a0, a1, a2 uint32) (uint32, uint32, uint32) {
 	return pi2(gamma(pi1(theta(a0, a1, a2))))
 }
 
-func (tw *Way3) bytes2block(data []byte) (uint32, uint32, uint32) {
-	w0 := (uint32(data[3]) << 24) | (uint32(data[2]) << 16) | (uint32(data[1]) << 8) | uint32(data[0])
-	w1 := (uint32(data[7]) << 24) | (uint32(data[6]) << 16) | (uint32(data[5]) << 8) | uint32(data[4])
-	w2 := (uint32(data[11]) << 24) | (uint32(data[10]) << 16) | (uint32(data[9]) << 8) | uint32(data[8])
+func bytes3block(data []byte) (uint32, uint32, uint32) {
+	w0 := (uint32(data[0]) << 24) | (uint32(data[1]) << 16) | (uint32(data[2]) << 8) | uint32(data[3])
+	w1 := (uint32(data[4]) << 24) | (uint32(data[5]) << 16) | (uint32(data[6]) << 8) | uint32(data[7])
+	w2 := (uint32(data[8]) << 24) | (uint32(data[9]) << 16) | (uint32(data[10]) << 8) | uint32(data[11])
 	return w0, w1, w2
 }
 
-func (tw *Way3) block2bytes(a0, a1, a2 uint32, output []byte) {
-	output[3] = byte((a0 >> 24) & 0xff)
-	output[2] = byte((a0 >> 16) & 0xff)
-	output[1] = byte((a0 >> 8) & 0xff)
-	output[0] = byte(a0 & 0xff)
+func block3bytes(a0, a1, a2 uint32, output []byte) {
+	output[0] = byte((a0 >> 24) & 0xff)
+	output[1] = byte((a0 >> 16) & 0xff)
+	output[2] = byte((a0 >> 8) & 0xff)
+	output[3] = byte(a0 & 0xff)
 
-	output[7] = byte((a1 >> 24) & 0xff)
-	output[6] = byte((a1 >> 16) & 0xff)
-	output[5] = byte((a1 >> 8) & 0xff)
-	output[4] = byte(a1 & 0xff)
+	output[4] = byte((a1 >> 24) & 0xff)
+	output[5] = byte((a1 >> 16) & 0xff)
+	output[6] = byte((a1 >> 8) & 0xff)
+	output[7] = byte(a1 & 0xff)
 
-	output[11] = byte((a2 >> 24) & 0xff)
-	output[10] = byte((a2 >> 16) & 0xff)
-	output[9] = byte((a2 >> 8) & 0xff)
-	output[8] = byte(a2 & 0xff)
+	output[8] = byte((a2 >> 24) & 0xff)
+	output[9] = byte((a2 >> 16) & 0xff)
+	output[10] = byte((a2 >> 8) & 0xff)
+	output[11] = byte(a2 & 0xff)
 }

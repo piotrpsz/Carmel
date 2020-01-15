@@ -266,8 +266,8 @@ func (w *Window) entryHandler(_, e interface{}) {
 			if (keyEvent.State() & uint(gdk.GDK_SHIFT_MASK)) == 0 {
 				startIter := w.entryBuffer.GetStartIter()
 				endIter := w.entryBuffer.GetEndIter()
-				if text, err := w.entryBuffer.GetText(startIter, endIter, true); tr.IsOK(err) {
 
+				if text, err := w.entryBuffer.GetText(startIter, endIter, true); tr.IsOK(err) {
 					w.entryBuffer.Delete(w.entryBuffer.GetStartIter(), w.entryBuffer.GetEndIter())
 					w.entryBuffer.PlaceCursor(w.entryBuffer.GetIterAtLine(0))
 
@@ -277,7 +277,6 @@ func (w *Window) entryHandler(_, e interface{}) {
 								w.buddyNewsChan <- msg
 							}
 						}
-
 					}
 				}
 			}

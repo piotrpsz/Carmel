@@ -29,12 +29,13 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"Carmel/mainWindow"
 	"Carmel/shared/tr"
-	"fmt"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
-	"os"
 )
 
 const (
